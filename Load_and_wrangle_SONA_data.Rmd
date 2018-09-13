@@ -201,6 +201,7 @@ sona_sentences %>%
 
 ```{r}
 # save R objects
+# test
 save(sona_files, sona_data, sona_sentences, sona_words, sona_matrix, predicter_presidents_name, file = "Main_SONA_objects.R")
 ```
 
