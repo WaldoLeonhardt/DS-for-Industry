@@ -209,6 +209,71 @@ sona_sentences %>%
 ```
 
 
+## TF-IDF
+
+
+
+```{r fig.width=8, fig.height=10}
+
+# Calculating term frequency - TF
+sona_tf = sona_matrix/apply(sona_matrix,1,sum)
+# sona_tf[1:10,1:10]
+
+# Calculating inverse document frequency - IDF
+sona_matrix_cnt = ifelse(sona_matrix>0,1,0)
+# sona_matrix_cnt[1:10,1:10]
+sona_idf = log(apply(sona_matrix_cnt, 2, sum))/nrow(sona_matrix)
+# sona_idf[1:10]
+
+# TF x IDF
+# dim(sona_tf)
+# length(sona_idf)
+sona_tfidf = sona_tf * sona_idf
+# sona_tfidf[1:10,1:10]
+
+# ---------------------------------------------
+# Using built in function (https://www.tidytextmining.com/tfidf.html)
+sona_words <- sona_words %>%  bind_tf_idf(word, sentence.id , count)
+sona_words
+
+sona_words %>% arrange(desc(tf_idf))
+
+
+sona_words %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>% 
+  group_by(president) %>% 
+  top_n(15) %>% 
+  ungroup %>%
+  ggplot(aes(x = reorder(word,tf_idf), y = tf_idf, fill = president)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~president, ncol = 2, scales = "free") +
+  coord_flip()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### --------------------------------------------------------------------------------------
+
 ## Feed-forward neural network
 
 Create a basic feed-forward neural network using the keras package.
