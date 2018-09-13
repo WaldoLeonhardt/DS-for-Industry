@@ -205,6 +205,6 @@ save(sona_files, sona_data, sona_sentences, sona_words, sona_matrix, predicter_p
 ```
 
 ```{r}
-# Test GIT
+# Test GIT 2
 ```
 
