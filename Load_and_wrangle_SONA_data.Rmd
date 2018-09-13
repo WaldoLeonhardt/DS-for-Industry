@@ -15,6 +15,7 @@ Build a data frame containing the filename, the speech text, president and year 
 
 ```{r}
 library(tidyverse)
+#need to test github with this new comment!
 
 # extract list of SONA files
 # NOTE: that file name "2009_pre_elections_ Motlanthe.txt" has been corrected to remove the space before Motlanthe as this will cause issues later
