@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Introduction
 
-This is the second assignment for Data Science for Industry where the goal is to use as input the State of the Nation Address (SONA) speeches and achieve the following:
+This is the second assignment for Data Science for Industry where the goal is to use as input the State of the Nation Address (SONA) speeches from 1994 to 2018 and achieve the following:
 
 1.	Build a neural network classifier which can predict who was the president from any given sentence extracted from a speech.
 2.	Assess the out-of-sample performance of the classifier.
@@ -59,6 +59,16 @@ sona_data$year = str_extract(sona_data$filename, "[0-9]{4}") # year is the first
 
 head(sona_data)
 ```
+  
+The below histogram shows the amount of speeches we have available from our data per president. It is clear that we have a lot of speeches for Mandela, Mbeki and Zuma, but for Ramaphosa, de Klerk and Motlanthe only a single speech each is available.    
+  
+```{r}
+library(ggplot2)
+ggplot(data=sona_data, aes(sona_data$president)) + 
+  geom_bar(fill="darkblue")+
+  labs(title="Counts of speeches per president", x="President Name", y="Count") +    
+  scale_y_continuous(breaks = c(2,4,6,8,10))
+```
 
 We can now extract the sentences within each speech. To do this we will use the unnest_tokens function in package tidytext.
 
@@ -86,9 +96,27 @@ sona_words = sona_sentences %>% unnest_tokens(word, sentence, token = "words")
 
 head(sona_words)
 ```
+  
+we further explore our data by taking an overall look at frequent words (excluding stopwords) used and which president used these words as the plot below shows.  
+  
+```{r}
+#count how many times each word was used overall (all speeches) per president
 
+per_pres = sona_words %>%
+  filter(!word %in% stop_words$word,str_detect(word, "[a-z]")) %>%
+  group_by(president) %>%
+  count(word, sort = TRUE) %>%
+   filter(rank(desc(n)) <= 20)
+
+
+ggplot(per_pres[1:20,], aes(y=n, x=word))+
+  geom_col(aes(fill=president), position="dodge") + theme_minimal() + coord_flip() +
+  labs(title="Top 20 repeated words overall", x="Word", y="Count") 
+
+```
+  
 List the top 30 most frequent words used:
-
+  
 ```{r}
 # view word frequencies
 sona_words %>%
@@ -126,7 +154,7 @@ sona_words %>%
   filter(rank(desc(n)) <= 30) # list top 30 ranked words
 ```
 
-We can add a count of words per sentence and list the sentences where the same word occurs the most frequent.
+We can add a count of words per sentence and list the sentences where the same word occurs the most frequent. Interestingly, the word that occurs most frequently in a sentence is actually the Afrikaans word "die" when Mbeki was quoting a poem. This should not be removed from our set, as Afrikaans stop words in an Afrikaans sentence (when predicting on that) will also be considered, hence we keep this in.
 
 ```{r}
 sona_words = sona_words %>%
@@ -209,17 +237,306 @@ sona_sentences %>%
   select(president, sentence.count, sentence.percentage, adjust.class.weight) %>%
   arrange(sentence.count)
 ```
+  
+##Topic modelling
+We want to investigate what topics the SONA speeches touched on. As we have no idea how many topics there might be, we take a value of 6 (1 per president) as this will make the most sense intuitively. Our aim is to name and interpret the topics.   
+  
+We need a tibble, per president, that shows the word and the count (how many times this word occurs per president.) This data is shown below. Note that we also stem the words to avoid having cases like 'child' different to 'children' which came up as main topic differentiators with unstemmed words. The summary below shows how we group the word counts together per president.    
+  
+```{r}
+library(SnowballC)
+
+sona_tdf = sona_words %>%
+  mutate(word=wordStem(word)) %>%
+  group_by(president,word) %>%
+  count() %>%  
+  ungroup() 
+head(sona_tdf)
+```
+  
+Then we cast this into a DocumentTermMatrix.  
+  
+```{r}
+dtm_sona <- sona_tdf %>% 
+  cast_dtm(president, word, n)
+
+```
+  
+Latent Dirichlet Allocation will be used for topic modelling. It basically labels a topic as a mixture of words and a document as a mixture of topics. 
+  
+```{r}
+library(topicmodels)
+library(tidyverse)
+library(tidytext)
+set.seed(123)
+sona_lda <- LDA(dtm_sona, k = 6, control=list(seed=123))
+#sona_lda
+#str(sona_lda)
+```
+    
+###Investigating what our topics are about  
+  
+We need to focus on 2 parameters to establish what our topics are about:
+  
+* `beta`: these parameters control the probability of a given topic k generating a particular word i.
+* `gamma`: this gives the topic "mixtures" for each document.
+  
+As an example, in the below we can see the word 'absolut' has probabilities of 'beta' to be in each topic as displayed below.  
+  
+```{r}
+library(tidytext)
+sona_topics <- tidy(sona_lda, matrix = "beta") 
+ head(sona_topics)
+
+```
+  
+Now we extract the top 5 words per topic and plot it to display visually:
+  
+```{r}
+top_terms <- sona_topics %>%
+  group_by(topic) %>%
+  top_n(5, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta) 
+
+top_terms %>%
+  #mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  labs(title="Top 5 stem words per topic", x="", y="Beta") +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+If we consider the most used words, we can roughly interpret our topics as below:  
+ - Topic 1 has $Governance$, $Programme$, $Nation$, $Develop$ and $Sector$ as important words. The unique words here (compared to top 5 words in other topics are $sector$ and $programme$.) Hence our conclusion is that this topic concerns governing by developing sectors and programmes. 
+ -Topic 2 has $South$, $people$, $African$, $Nation# and $Countries$ as the top 5 words. The combination of these words tell us that this topic has to do with the identity of the country. The only unique word here in the top 5 compared to other topics, is $African$.  
+ -Topic 3 has words in the top 5 of $Country$, $Govern$, $Develop$, $Improve$ and $People$. Unique words we see here is $Improve$ hence we conclude that this topic refers to country improvement and development.  
+ -Topic 4 has words of $Govern$, $People$, $Country$, $Ensure$ and $Include$ in its top 5 words. The unique words here are $include$ and $ensure$ which tells us that this topic is about inclusion in the country and ensuring that things are done.  
+ -Topic 5 has the words $Govern$, $Nation$, $People$, $South$ and $Constitution$ coming out in the top 5. Unique words here refer to $Constitution$ hence we can conclude that this topic refers to the country's constitution.  
+ -Topic 6 have top 5 words as $Govern$, $South$, $Nation$, $Develop$ and $Continuous$ and we notice the unique words here are $Continuous$ so we can see this topic as one that states that things must continue to develop for the nation. 
+  
+We also focus on the log ratio differences between words to see if we can better establish the differences between topics. We need to filter out common words (words with beta >= 0.001) in at least one topic. Using $log_2(\beta_2/\beta_1)$ we can model the differences between 2 topics. I.e. if $\beta_2$ is twice as large as $\beta_2$, the log ratio will be 1, whereas if $\beta_1$ is twice as large as $\beta_2$, the log ratio will give a value of -1. Filtering on greater log difference values (e.g. $>=0.0001$) in one topic gives an indication of the contrast.  
+
+```{r, warning=FALSE}
+beta_spread <- sona_topics %>%
+  mutate(topic = paste0("topic", topic)) %>%
+  spread(topic, beta) %>%
+  filter(topic1 > .001 | topic2 > .001 | topic3 > .001 |topic4 > .001 |topic5 > .001 |topic6 > .001 ) %>%
+  mutate(log_ratio_1 = log2(topic2 / topic1), log_ratio_3 = log2(topic3 / topic1), log_ratio_4 = log2(topic4 / topic1), log_ratio_5 = log2(topic5 / topic1), log_ratio_6 = log2(topic6 / topic1)) 
+
+beta_spread %>%
+  group_by(direction = log_ratio_1 > 0) %>%
+  top_n(5, abs(log_ratio_1)) %>%
+  ungroup() %>%
+  mutate(term = reorder(term, log_ratio_1)) %>%
+  ggplot(aes(term, log_ratio_1)) +
+  labs(title="Log2 ratio of beta in topic 2 / topic 1", x="Words", y="Ratio") +
+  geom_col() +
+  #scale_y_continuous(limits=c(-300,10000000000000)) +
+  coord_flip()
+
+beta_spread %>%
+  group_by(direction = log_ratio_3 > 0) %>%
+  top_n(5, abs(log_ratio_3)) %>%
+  ungroup() %>%
+  mutate(term = reorder(term, log_ratio_3)) %>%
+  ggplot(aes(term, log_ratio_3)) +
+  labs(title="Log2 ratio of beta in topic 3 / topic 1", x="Words", y="Ratio") +
+  geom_col() +
+  coord_flip()
+
+beta_spread %>%
+  group_by(direction = log_ratio_4 > 0) %>%
+  top_n(5, abs(log_ratio_4)) %>%
+  ungroup() %>%
+  mutate(term = reorder(term, log_ratio_4)) %>%
+  ggplot(aes(term, log_ratio_4)) +
+  labs(title="Log2 ratio of beta in topic 4 / topic 1", x="Words", y="Ratio") +
+  geom_col() +
+  coord_flip()
+
+beta_spread %>%
+  group_by(direction = log_ratio_5 > 0) %>%
+  top_n(5, abs(log_ratio_5)) %>%
+  ungroup() %>%
+  mutate(term = reorder(term, log_ratio_5)) %>%
+  ggplot(aes(term, log_ratio_5)) +
+  labs(title="Log2 ratio of beta in topic 5 / topic 1", x="Words", y="Ratio") +
+  geom_col() +
+  coord_flip()
+
+beta_spread %>%
+  group_by(direction = log_ratio_6 > 0) %>%
+  top_n(5, abs(log_ratio_6)) %>%
+  ungroup() %>%
+  mutate(term = reorder(term, log_ratio_6)) %>%
+  ggplot(aes(term, log_ratio_6)) +
+  labs(title="Log2 ratio of beta in topic 6 / topic 1", x="Words", y="Ratio") +
+  geom_col() +
+  coord_flip()
 
 
+
+```
+  
+Interpreting the log ratio differences, we see the below when we compare each topic to topic 1 (to shed more light on the meaning and inclusion/exclusion of the topics):  
+Topic 1 (Development and programmes) differs from topic 2 (African/country identity) the most by words like $even$ from topic 2 and $discharge$ seen mostly in topic 1. Topic 1 also include words like $truth$ and $instances$ which makes sense considering it is about development and programmes as opposed to identity. 
+Topic 3 (Country improvement and development) differs from topic 1 with words such as $Diligent$ and $Even$ used in topic 3 and topic 1 has more words regarding $Centenary$ and $own$ used that we do not see in topic 3.
+Topic 4 (Inclusion and ensuring) also inclused words like $diligent$ and $even$ more than topic 1. This is expected as topic 4 focuses on inclusion, hence $even$ and fairness will be important in this topic, much more than in a topic regarding development and programmes.
+Topic 5 (Constitution) differs also by using words like $even$ and $diligent$ but it contains far fewer occurences of topic 1 words like $compatriot$, $limpopo$ and $graduation$.
+Topic 6 (Continuous) contains words like $even$ and $diligence$, but fewer $discharge$ and $government$ words than topic 1. 
+    
+##Document topic probabilities  
+Gamma is the mixture of topics per president, so the below table shows which topic is used by which president. 
+  
+```{r}
+
+sona_gamma = tidy(sona_lda, matrix="gamma")
+
+sona_gamma %>%
+  mutate(document = reorder(document, gamma * topic)) %>%
+  ggplot(aes(factor(topic), gamma)) +
+  labs(title="Boxplots of topic per president") +
+  geom_boxplot() +
+  facet_wrap(~ document)
+
+```
+  
+From above, we interpret the topics per president as below (note the topic modelling distinguished quite well between presidents) :
+De Klerk's speech consists mainly of topic 5 (Constitution.) This makes sense considering this is the last speech before apartheid ended and many things changed constitutionally thereafter (as well as enabling all people to vote.) 
+
+Mandela's speech used both topic 3 (less) and topic 5 (higher percentage) with his speeches. Topic 3 covers the country improvement and development and topic 5 the constitution. It is interesting to note that both de Klerk and Mandela had topic 5 covered, as this was a time for transition for the country and the constitution would have been an important topic to cover considering the changes made in 1994. 
+
+Topic 1 (Development and programmes) makes up a portion of Mbeki's speech. We also see Topic 4 (Inclusion and ensuring) making up the larger part of Mbeki's speech. Mbeki's speech can hence be identified by these 2 main topics, we do not see other presidents making use of these topics significantly.
+
+Motlanthe took over from Mbeki and we see his speech mainly consisted of topic 3 (country improvement and development.) It is interesting to note that both he and Mandela used topic 3 and both times these presidents would have viewed the previous presidency as something that had to be 'corrected.' (De Klerk, Mandela's predecessor, was from another party,  and Mbeki was ousted early as president as well.) We see a small percentage of Motlanthe's speech covering topic 2 (African country/identity) as well. This is interesting to note as his successor, Zuma, also had a portion of this topic regarding African country/identity in his speech. 
+
+Zuma's speeches mainly covered topic 6 (continuous) but we see his successor, Ramaphose, only covered topic 2 (African country/identity.) So the past 3 presidents (Motlanthe, Zuma and Ramaphosa) all had an element of the African country/identity in their speeches, but Motlanthe focused on this far more than his predecessors. 
+  
+##Wordclouds for our presidents  
+We can use our stem-words to show the most used words per president. For the example below, we show the most used (stem) words of Mandela in a word cloud of 25 words as shown below. As expected, the words $govern$, $nation$ and $people$ stand out.  
+  
+```{r}
+library("wordcloud")
+sona_tdf %>%
+  filter(president=='Mandela') %>%
+  with(wordcloud(word, n, max.words = 25))
+```
+  
+It would be interesting to do sentiment analysis per president (or per year) to see how the context of SONAs changed - was it more negative or positive?  
+
+##Sentiment analysis  
+
+We use the bing lexicon (words are labelled as positive or negative) to get an idea of each president's speech, but also see how sentiment changed over time. Note we will not do this on the stem words, but on the actual words, as the sentiment is dependant on more than the stem words itself, so we need to keep the whole word in.
+
+Below shows the sentiments for specific words.
+
+```{r}
+get_sentiments("bing") %>% head(10)
+```
+
+We use our tidyframe that is tokenised by words (not stemmed) and add the sentiment analysis on this. The result is as below. Note we change all the NA words to neutral for clarity.
+ 
+```{r}
+sona_words_sent = sona_words %>% 
+  left_join(get_sentiments("bing")) %>% # add sentiments (pos or neg)
+  select(word,sentiment,everything()) %>%
+  mutate_each(funs(replace(., is.na(sentiment), "neutral")))
+
+head(sona_words_sent)
+
+```
+
+Now we can look again at the most used positive words per president, which president used which positive words (and how many times overall)?  
+
+```{r}
+sona_words_sent %>%
+  ungroup %>%
+  select('word', 'sentiment', 'president') %>%
+  filter(sentiment == "positive") %>%
+  group_by(president) %>%
+  count(word) %>%
+  arrange(desc(n)) %>%
+  filter(rank(desc(n)) <= 4) %>%
+  ggplot(aes(x=reorder(word, n),y=n, fill=president)) + geom_col() + coord_flip() + 
+  labs(title="Most occuring positive words per president used", x="Word", y="Count")
+```
+  
+We can do the same for the negative words, which president used the mostly used negative words and how many times during his reigh as president?  
+  
+```{r}
+sona_words_sent %>%
+  ungroup %>%
+  select('word', 'sentiment', 'president') %>%
+  filter(sentiment == "negative") %>%
+  group_by(president) %>%
+  count(word) %>%
+  arrange(desc(n)) %>%
+  filter(rank(desc(n)) <= 4) %>%
+  ggplot(aes(x=reorder(word, n),y=n, fill=president)) + geom_col() + coord_flip() +
+  labs(title="Most occuring negative words per president used", x="Word", y="Count")
+```
+
+It is interesting to note that crime has been a hot topic with Zuma, Mandela and Mbeki mentioning it often during their presidential SONA speeches. Poverty is a recurring negative theme with the last 4 presidents mentioning that frequently in their speeches. We also see corruption frequently mentioned by Zuma and Ramaphosa, and that is all I am going to say about that...
+
+In summary, if we combine all speeches and want to know which were the most used positive and negative words, a wordcloud can also represent it as shown below, the negative words are shown in red at the top, with the positive words in aqua-colour.   
+
+```{r, warning=FALSE}
+library(reshape2)
+
+sona_words_sent %>%
+  ungroup() %>%
+  filter(sentiment != 'neutral') %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("#F8766D", "#00BFC4"),
+                   max.words = 25, title.size = 1)
+```
+  
+#Changing sentiments over time (per year per speech)  
+  
+We would like to see how the sentiments changed per year - did it grow generally more negative, or more positive? Instead of investigating per president, we would like to trend the positive/negative ratio per year. In other words, what percentage of total words used were positive, what percentage was negative, and how did this change over time?  
+  
+```{r, warning=FALSE, message=FALSE}
+sona_sent_plot = 
+sona_words_sent %>%
+  ungroup %>%
+  select('sentiment', 'year', 'president') %>% 
+  count(sentiment, year, president) %>%
+  spread(sentiment, n, fill=0) %>%
+  mutate(sentiment_diff = positive-negative, 
+         sentiment_norm = (positive - negative) / (positive+negative+neutral) * 100)
+
+# plot of sentiment over time & automatically choose a method to model the change
+ggplot(sona_sent_plot, aes(x = as.numeric(year), y = sentiment_diff)) + 
+  geom_point(aes(color = president))+ # add points to our plot, color-coded by president
+  geom_smooth(method = "auto") + # pick a method & fit a model
+  labs(title="Sentiment difference over time per president", x="Year", y="Delta (positive-negative) words") + 
+   scale_x_continuous(breaks = c( seq(1994, 2018, 2)))
+
+# plot of sentiment over time & automatically choose a method to model the change
+ggplot(sona_sent_plot, aes(x = as.numeric(year), y = sentiment_norm)) + 
+  geom_point(aes(color = president))+ # add points to our plot, color-coded by president
+  geom_smooth(method = "auto") + # pick a method & fit a model
+  labs(title="Sentiment ratio over time per president", x="Year", y="Ratio of ((positive-negative)/total) words") +
+   scale_x_continuous(breaks = c( seq(1994, 2018, 2)))  
+  
+```
+  
+From the above we can see that de Klerk's speech was quite negative, this was a very uncertain time for the country and it comes across in his speech's negativity. Mandela focused a lot on building community (improvement topic) and uniting the nation, which inherently is more positive words. Generally speaking, the trend continued to increase positively when Mbeki took over from Mandela in 2000. We can see the ratio flattening around 2005 and the sentiment ratio of Mbeki was almost as low in 2008 as when he started his presidency in 2000. The year of 2008 is also the year that the world-wide recession hit and the outlook was indeed bleak that year. 
+
+Motlanthe took over for a short while until Zuma could be president in 2009. Zuma was very positive in 2010 and 2011, but thereafter (with the exception of 2015) he did not reach such positive sentiment ratios again. An interesting trend we see is that each president, when it is their last SONA, ended with a SONA that has a sentiment ratio below (more negative than) the smooth average curve drawn above. Zuma also ended his SONA with a negative ratio and Ramaphosa was very positive again when he became president in 2018. 
+  
 ## Feed-forward neural network
-
+  
 We can now create a basic feed-forward neural network using the keras package.
 
 The following architecture has been selected for the model:
 
 * A single hidden layer with 640 neurons.
-* Our activation function for the hidden layer will be ReLU (rectified linear unit where any negative values will be made zero).
-* We will use the softmax activation function for our output to predict a probability for each of the 6 presidents.
+* Our activation function for the hidden layer will be ReLU (rectified linear unit where any negative values will be made zero). This is safe to use as we do not have any values below zero, so we do not need to be concerned regarding 'vanishing' gradients for negative values. 
+* We will use the softmax activation function for our output to predict a probability for each of the 6 president classes.
 * The selected optimizer is Adam (the best stochastic optimizer at present with a default learning rate of 0.001).
 * Our loss function will be categorical cross entropy as we have a multi-class problem to solve.
 * The accuracy metric will be used to access the performance of our model. We will assess the accuracy of our model by using a train and test dataset. Train data will be 80% of the sentences. Test data will be the remaining 20%.
