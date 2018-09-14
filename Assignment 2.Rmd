@@ -15,7 +15,7 @@ This is the second assignment for Data Science for Industry where the goal is to
 
 1.	Build a neural network classifier which can predict who was the president from any given sentence extracted from a speech.
 2.	Assess the out-of-sample performance of the classifier.
-3.	Conduct a descriptive analysis of the text in the speeches
+3.	Conduct a descriptive analysis of the text in the speeches.
 
 
 ## Load data
@@ -60,7 +60,7 @@ sona_data$year = str_extract(sona_data$filename, "[0-9]{4}") # year is the first
 head(sona_data)
 ```
 
-Extract sentences
+We can now extract the sentences within each speech. To do this we will use the unnest_tokens function in package tidytext.
 
 ```{r}
 library(tidytext)
@@ -75,7 +75,7 @@ sona_sentences$sentence = str_to_lower(sona_sentences$sentence)
 head(sona_sentences)
 ```
 
-Extract words
+We would also like to extract the words within sentences. We can also do this using the unnest_tokens function.
 
 ```{r}
 # add an ID variable for sentences
@@ -87,7 +87,7 @@ sona_words = sona_sentences %>% unnest_tokens(word, sentence, token = "words")
 head(sona_words)
 ```
 
-List the most frequent words used
+List the top 30 most frequent words used:
 
 ```{r}
 # view word frequencies
@@ -117,7 +117,7 @@ sona_words = sona_words %>%
 head(sona_words, 30)
 ```
 
-Look again at the words occuring the most
+Let's look again at the words occuring the most when ignoring stop-words:
 
 ```{r}
 # view word frequencies
@@ -126,7 +126,7 @@ sona_words %>%
   filter(rank(desc(n)) <= 30) # list top 30 ranked words
 ```
 
-Add count of words per sentance
+We can add a count of words per sentence and list the sentences where the same word occurs the most frequent.
 
 ```{r}
 sona_words = sona_words %>%
@@ -139,7 +139,7 @@ sona_words %>%
   head(30)
 ```
 
-Reshape data in matrix form
+To use the data in a neural network we would need to reshape the data in matrix form.
 
 ```{r}
 # build matrix of words per sentence.id
@@ -175,13 +175,13 @@ colnames(sona_matrix) = sona_colnames
 sona_matrix[1:10,1:20]
 ```
 
-Confirm the size of our matrix
+Confirm the size of our matrix:
 
 ```{r}
 dim(sona_matrix)
 ```
 
-Confirm the number of presidents
+Confirm the number of presidents, and list them in the order of total words we have for them.
 
 ```{r}
 sona_words %>%
@@ -191,6 +191,8 @@ sona_words %>%
   select(president, word.count, word.percentage) %>%
   arrange(word.count)
 ```
+
+We can also list the presidents by the number of sentences we have for them and calculate an adjustment weight which can be applied if we would like to create an equal balance of sentences among them.
 
 ```{r}
 #sona_sentences %>%
@@ -211,16 +213,21 @@ sona_sentences %>%
 
 ## Feed-forward neural network
 
-Create a basic feed-forward neural network using the keras package.
+We can now create a basic feed-forward neural network using the keras package.
 
-We will assess the accuracy of our model by using a train and test dataset.
+The following architecture has been selected for the model:
 
-Train data will be 80% of the explicit book ratings.
-Test data will be the remaining 20%.
+* A single hidden layer with 640 neurons.
+* Our activation function for the hidden layer will be ReLU (rectified linear unit where any negative values will be made zero).
+* We will use the softmax activation function for our output to predict a probability for each of the 6 presidents.
+* The selected optimizer is Adam (the best stochastic optimizer at present with a default learning rate of 0.001).
+* Our loss function will be categorical cross entropy as we have a multi-class problem to solve.
+* The accuracy metric will be used to access the performance of our model. We will assess the accuracy of our model by using a train and test dataset. Train data will be 80% of the sentences. Test data will be the remaining 20%.
 
 ```{r}
 library(keras)
 set.seed(123)
+use_session_with_seed(seed = 123, disable_gpu = F, disable_parallel_cpu = F, quiet = T) # set seed in Keras and TensorFlow
 
 # scale data
 # sona_matrix = scale(sona_matrix) # NOTE: scaling did not improved model performance
@@ -254,7 +261,7 @@ y_test = to_categorical(y_test)
 
 # define model layers
 model1 %>% 
-  layer_dense(units = 6517,                # number of neurons in 1st hidden layer, use 2/3 of (input_shape + output_shape)
+  layer_dense(units = 640,                 # number of neurons in the hidden layer
   input_shape = input_shape) %>%           # dimension of input array
   layer_activation('relu') %>%             # use a rectified linear unit as an activation function in the hidden layer
   layer_dense(units = output_shape) %>%    # adds an output layer to the network
@@ -269,20 +276,20 @@ model1 %>% compile(
 
 # fit model
 model1 %>%
-  fit(x = x_train,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
+  fit(x = x_train,
       y = y_train,
       epochs = 50,
       batch_size = 32,
+      verbose = 0,
       validation_data = list(x_test, y_test)) %>%
   plot()
 ```
 
-
 Save model
 
 ```{r}
-save_model_hdf5(model1, "Waldo_SONA_model1.h5") #save model to use later on
-save_model_weights_hdf5(model1, "Waldo_SONA_model1_weights.h5") #save model weights to use later on
+save_model_hdf5(model1, "models/Waldo_SONA_model1.h5") #save model to use later on
+save_model_weights_hdf5(model1, "models/Waldo_SONA_model1_weights.h5") #save model weights to use later on
 ```
 
 
@@ -293,7 +300,22 @@ cat("Train classification success rate = ", mean(model1$predict_classes(x_train)
 cat("Test classification success rate = ", mean(model1$predict_classes(x_test) == predicter_presidents_id[-train.index]))
 ```
 
-From the above result we can see that the model is overfitting as the train accuracy is double that of the test accuracy.
+
+From the above result we can see that the model is overfitting as the train accuracy is more than double that of the test accuracy.
+The test accuracy is also worse than what a random guess would have been (e.g. 50%).
+For this first model we have only used 640 neurons in a single hidden layer, let's expand the architecture to see if we can improve on this model.
+
+Our next model will use the following architecture:
+
+* Adding a 1st hidden layer with 6517 neurons, where this number has been determined by taking 2/3 of (input variables + output variables).
+* Applying a 30% random dropout rate on the 1st layer for each epoch.
+* Adding a 2nd hidden layer with 3258 neurons (half the size of the 1st hidden layer).
+* Applying a 20% random dropout rate on the 2nd layer for each epoch.
+* Our activation function for the hidden layers will be ReLU (rectified linear unit where any negative values will be made zero).
+* We will use the softmax activation function for our output to predict a probability for each of the 6 presidents.
+* The selected optimizer is Adam (the best stochastic optimizer at present with a default learning rate of 0.001).
+* Our loss function will be categorical cross entropy as we have a multi-class problem to solve.
+* The accuracy metric will be used to access the performance of our model.
 
 ```{r}
 # initiate model
@@ -322,10 +344,11 @@ model2 %>% compile(
 
 # fit model
 model2 %>%
-  fit(x = x_train,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
+  fit(x = x_train,
       y = y_train,
       epochs = 50,
       batch_size = 32,
+      verbose = 0,
       validation_data = list(x_test, y_test)) %>%
   plot()
 ```
@@ -335,7 +358,8 @@ cat("Train classification success rate = ", mean(model2$predict_classes(x_train)
 cat("Test classification success rate = ", mean(model2$predict_classes(x_test) == predicter_presidents_id[-train.index]))
 ```
 
-We can see our test accuracy improved from 48.2% to 54.1%, but the model is still overfitting.
+
+We can see our test accuracy improved slightly from 46% to 48.6%, but the model is still overfitting.
 
 We can also look at the confusion matrix:
 
@@ -345,17 +369,17 @@ table(predicted = model2$predict_classes(x_test), actual = predicter_presidents_
 
 This table shows that, for:
 
-* deKlerk (ID = 0), not a single prediction was correct. This can be expected as we had the least number of words for deKlerk (only 1% of all words were assosiated with him).
-* Ramaphosa (ID = 5), only 2 predictions were correct. This is also expected as only 2.9% of all words were assosiated with him.
+* deKlerk (ID = 0), only 1 predictions were correct. This can be expected as we had the least number of words for deKlerk (only 1% of all words were assosiated with him).
+* Ramaphosa (ID = 5), not a single prediction was correct. This is also expected as only 2.9% of all words were assosiated with him.
 * Zuma (ID = 4), where we had most predictions correct and we also had 30.9% of all words assosiated with him.
 * Mbeki (ID = 2), for whom we had the highest word percentage assosiation (39.1%) and where more than half of the predictions where correct.
 
 ```{r}
-save_model_hdf5(model2, "Waldo_SONA_model2.h5") #save model to use later on
-save_model_weights_hdf5(model2, "Waldo_SONA_model2_weights.h5") #save model weights to use later on
+save_model_hdf5(model2, "models/Waldo_SONA_model2.h5") #save model to use later on
+save_model_weights_hdf5(model2, "models/Waldo_SONA_model2_weights.h5") #save model weights to use later on
 ```
 
-Let's see if we can get an improvement, by correcting the class imbalance.
+Let's see if we can get an improvement, by correcting the class imbalance. We will use the weight adjustments which we have already calculated for grouping sentences per president.
 
 ```{r}
 # initiate model
@@ -389,6 +413,7 @@ model3 %>%
       class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2), # balance classes
       epochs = 50,
       batch_size = 32,
+      verbose = 0,
       validation_data = list(x_test, y_test)) %>%
   plot()
 ```
@@ -398,17 +423,20 @@ cat("Train classification success rate = ", mean(model3$predict_classes(x_train)
 cat("Test classification success rate = ", mean(model3$predict_classes(x_test) == predicter_presidents_id[-train.index]))
 ```
 
-Note out performance is now lower as used less units in the layers.
+Note our overall performance has not improved and sit on 47.8%.
 
+Looking at the confusion matrix we can however see the following improvement:
+
+* deKlerk (ID = 0), we now have 3 correct prediction compared with 0 before.
+* Ramaphosa (ID = 5), we now have 4 correct prediction compared with 2 before.
 
 ```{r}
 table(predicted = model3$predict_classes(x_test), actual = predicter_presidents_id[-train.index])
 ```
 
-
 ```{r}
-save_model_hdf5(model3, "Waldo_SONA_model3.h5") #save model to use later on
-save_model_weights_hdf5(model3, "Waldo_SONA_model3_weights.h5") #save model weights to use later on
+save_model_hdf5(model3, "models/Waldo_SONA_model3.h5") #save model to use later on
+save_model_weights_hdf5(model3, "models/Waldo_SONA_model3_weights.h5") #save model weights to use later on
 ```
 
 ```{r}
@@ -465,6 +493,9 @@ sona_sentences %>%
 
 
 ## CNN with embeddings
+
+Another approach we can onsider is using a Convolutional Neural Network (CNN) which is good when dealing with data in which the input features exhibit some kind of spatial or temporal ordering. CNNs are designed to exploit the structure of ordered data. Their fundamental building block is the convolution filter, which is a small matrix (normally 3x3), which is applied to the data to help extract hidden features.
+We can add embeddings to the CNN, which is simmalar to the latent variables concept we used for building a recommender system.
 
 ```{r}
 max_features = 2000       # choose max_features most popular words
@@ -548,18 +579,19 @@ model4 %>% compile(
 
 # fit model
 model4 %>%
-  fit(x = x_train_cnn,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
+  fit(x = x_train_cnn,
       y = y_train_cnn,
       class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2),
       epochs = 50,
       batch_size = 32,
+      verbose = 0,
       validation_data = list(x_test_cnn, y_test_cnn)) %>%
   plot()
 ```
 
 ```{r}
-save_model_hdf5(model4, "Waldo_SONA_model4.h5") #save model to use later on
-save_model_weights_hdf5(model4, "Waldo_SONA_model4_weights.h5") #save model weights to use later on
+save_model_hdf5(model4, "models/Waldo_SONA_model4.h5") #save model to use later on
+save_model_weights_hdf5(model4, "models/Waldo_SONA_model4_weights.h5") #save model weights to use later on
 ```
 
 ```{r}
@@ -567,7 +599,7 @@ cat("Train classification success rate = ", mean(model4$predict_classes(x_train_
 cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cnn) == test_cnn$y))
 ```
 
-Model 4 is a good improvement on the previous models. We now have an accuracy of 57.6% where the previous best was 54.1%
+Model 4 is a good improvement on the previous models. We now have an accuracy of 55.2% where the previous best was 47.8%
 
 
 Let's see if we can improve by using more features and increasing the max length of sentences?
@@ -654,18 +686,19 @@ model5 %>% compile(
 
 # fit model
 model5 %>%
-  fit(x = x_train_cnn,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
+  fit(x = x_train_cnn,
       y = y_train_cnn,
       class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2),
       epochs = 50,
       batch_size = 32,
+      verbose = 0,
       validation_data = list(x_test_cnn, y_test_cnn)) %>%
   plot()
 ```
 
 ```{r}
-save_model_hdf5(model5, "Waldo_SONA_model5.h5") #save model to use later on
-save_model_weights_hdf5(model5, "Waldo_SONA_model5_weights.h5") #save model weights to use later on
+save_model_hdf5(model5, "models/Waldo_SONA_model5.h5") #save model to use later on
+save_model_weights_hdf5(model5, "models/Waldo_SONA_model5_weights.h5") #save model weights to use later on
 ```
 
 ```{r}
@@ -757,18 +790,19 @@ model6 %>% compile(
 
 # fit model
 model6 %>%
-  fit(x = x_train_cnn,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
+  fit(x = x_train_cnn,
       y = y_train_cnn,
       class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2),
       epochs = 50,
       batch_size = 32,
+      verbose = 0,
       validation_data = list(x_test_cnn, y_test_cnn)) %>%
   plot()
 ```
 
 ```{r}
-save_model_hdf5(model6, "Waldo_SONA_model6.h5") #save model to use later on
-save_model_weights_hdf5(model6, "Waldo_SONA_model6_weights.h5") #save model weights to use later on
+save_model_hdf5(model6, "models/Waldo_SONA_model6.h5") #save model to use later on
+save_model_weights_hdf5(model6, "models/Waldo_SONA_model6_weights.h5") #save model weights to use later on
 ```
 
 ```{r}
