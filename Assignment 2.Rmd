@@ -97,7 +97,7 @@ sona_words = sona_sentences %>% unnest_tokens(word, sentence, token = "words")
 head(sona_words)
 ```
   
-we further explore our data by taking an overall look at frequent words (excluding stopwords) used and which president used these words as the plot below shows.  
+We further explore our data by taking an overall look at frequent words (excluding stopwords) used and which president used these words as the plot below shows.  
   
 ```{r}
 #count how many times each word was used overall (all speeches) per president
@@ -122,15 +122,6 @@ List the top 30 most frequent words used:
 sona_words %>%
   count(word, sort = TRUE) %>%
   filter(rank(desc(n)) <= 30) # list top 30 ranked words
-```
-
-```{r}
-# can also be done by the following
-sona_words %>%
-  group_by(word) %>%
-  summarise(count = n()) %>%
-  arrange(desc(count)) %>%
-  head(30)
 ```
 
 As expected, the most frequent words are stop-words. Let's remove those first.
@@ -239,6 +230,7 @@ sona_sentences %>%
 ```
   
 ##Topic modelling
+
 We want to investigate what topics the SONA speeches touched on. As we have no idea how many topics there might be, we take a value of 6 (1 per president) as this will make the most sense intuitively. Our aim is to name and interpret the topics.   
   
 We need a tibble, per president, that shows the word and the count (how many times this word occurs per president.) This data is shown below. Note that we also stem the words to avoid having cases like 'child' different to 'children' which came up as main topic differentiators with unstemmed words. The summary below shows how we group the word counts together per president.    
@@ -259,7 +251,6 @@ Then we cast this into a DocumentTermMatrix.
 ```{r}
 dtm_sona <- sona_tdf %>% 
   cast_dtm(president, word, n)
-
 ```
   
 Latent Dirichlet Allocation will be used for topic modelling. It basically labels a topic as a mixture of words and a document as a mixture of topics. 
@@ -445,7 +436,6 @@ sona_words_sent = sona_words %>%
   mutate_each(funs(replace(., is.na(sentiment), "neutral")))
 
 head(sona_words_sent)
-
 ```
 
 Now we can look again at the most used positive words per president, which president used which positive words (and how many times overall)?  
@@ -527,7 +517,8 @@ ggplot(sona_sent_plot, aes(x = as.numeric(year), y = sentiment_norm)) +
 From the above we can see that de Klerk's speech was quite negative, this was a very uncertain time for the country and it comes across in his speech's negativity. Mandela focused a lot on building community (improvement topic) and uniting the nation, which inherently is more positive words. Generally speaking, the trend continued to increase positively when Mbeki took over from Mandela in 2000. We can see the ratio flattening around 2005 and the sentiment ratio of Mbeki was almost as low in 2008 as when he started his presidency in 2000. The year of 2008 is also the year that the world-wide recession hit and the outlook was indeed bleak that year. 
 
 Motlanthe took over for a short while until Zuma could be president in 2009. Zuma was very positive in 2010 and 2011, but thereafter (with the exception of 2015) he did not reach such positive sentiment ratios again. An interesting trend we see is that each president, when it is their last SONA, ended with a SONA that has a sentiment ratio below (more negative than) the smooth average curve drawn above. Zuma also ended his SONA with a negative ratio and Ramaphosa was very positive again when he became president in 2018. 
-  
+
+
 ## Feed-forward neural network
   
 We can now create a basic feed-forward neural network using the keras package.
@@ -540,6 +531,7 @@ The following architecture has been selected for the model:
 * The selected optimizer is Adam (the best stochastic optimizer at present with a default learning rate of 0.001).
 * Our loss function will be categorical cross entropy as we have a multi-class problem to solve.
 * The accuracy metric will be used to access the performance of our model. We will assess the accuracy of our model by using a train and test dataset. Train data will be 80% of the sentences. Test data will be the remaining 20%.
+* The maximum number of epochs will be 20, but we enable early stopping in case the validation loss starts to increase to avoid overfitting.
 
 ```{r}
 library(keras)
@@ -547,7 +539,7 @@ set.seed(123)
 use_session_with_seed(seed = 123, disable_gpu = F, disable_parallel_cpu = F, quiet = T) # set seed in Keras and TensorFlow
 
 # scale data
-# sona_matrix = scale(sona_matrix) # NOTE: scaling did not improved model performance
+# sona_matrix = scale(sona_matrix) # NOTE: scaling did not improve model performance
 
 # select training index
 train.index = sample(1:nrow(sona_matrix), size = nrow(sona_matrix) * 0.8, replace = F)
@@ -592,21 +584,26 @@ model1 %>% compile(
 )
 
 # fit model
-model1 %>%
+history1 = model1 %>%
   fit(x = x_train,
       y = y_train,
-      epochs = 50,
+      epochs = 20,
       batch_size = 32,
+      callbacks = list(callback_early_stopping(monitor = "val_loss", min_delta = 0.001, patience = 3, verbose = 0)),
       verbose = 0,
-      validation_data = list(x_test, y_test)) %>%
-  plot()
+      validation_data = list(x_test, y_test))
+
+plot(history1)
 ```
+
+Note that the warning message above the graph is due to the early stopping setting we used. Our epochs were set to 20, but after 4 epochs the validation loss kept increasing, so training was terminated.
 
 Save model
 
 ```{r}
 save_model_hdf5(model1, "models/Waldo_SONA_model1.h5") #save model to use later on
 save_model_weights_hdf5(model1, "models/Waldo_SONA_model1_weights.h5") #save model weights to use later on
+save(history1, file = "models/history1.RData")
 ```
 
 
@@ -660,14 +657,16 @@ model2 %>% compile(
 )
 
 # fit model
-model2 %>%
+history2 = model2 %>%
   fit(x = x_train,
       y = y_train,
-      epochs = 50,
+      epochs = 20,
       batch_size = 32,
+      callbacks = list(callback_early_stopping(monitor = "val_loss", min_delta = 0.001, patience = 3, verbose = 0)),
       verbose = 0,
-      validation_data = list(x_test, y_test)) %>%
-  plot()
+      validation_data = list(x_test, y_test))
+
+plot(history2)
 ```
 
 ```{r}
@@ -676,7 +675,7 @@ cat("Test classification success rate = ", mean(model2$predict_classes(x_test) =
 ```
 
 
-We can see our test accuracy improved slightly from 46% to 48.6%, but the model is still overfitting.
+We can see our test accuracy improved slightly from 48.2% to 49%, but the model is still overfitting.
 
 We can also look at the confusion matrix:
 
@@ -686,14 +685,15 @@ table(predicted = model2$predict_classes(x_test), actual = predicter_presidents_
 
 This table shows that, for:
 
-* deKlerk (ID = 0), only 1 predictions were correct. This can be expected as we had the least number of words for deKlerk (only 1% of all words were assosiated with him).
-* Ramaphosa (ID = 5), not a single prediction was correct. This is also expected as only 2.9% of all words were assosiated with him.
+* deKlerk (ID = 0), not a single prediction was correct. This can be expected as we had the least number of words for deKlerk (only 1% of all words were assosiated with him).
+* Ramaphosa (ID = 5), only 1 predictions were correct. This is also expected as only 2.9% of all words were assosiated with him.
 * Zuma (ID = 4), where we had most predictions correct and we also had 30.9% of all words assosiated with him.
-* Mbeki (ID = 2), for whom we had the highest word percentage assosiation (39.1%) and where more than half of the predictions where correct.
+* Mbeki (ID = 2), for whom we had the highest word percentage assosiation (39.1%) and where more than half of the predictions were correct.
 
 ```{r}
 save_model_hdf5(model2, "models/Waldo_SONA_model2.h5") #save model to use later on
 save_model_weights_hdf5(model2, "models/Waldo_SONA_model2_weights.h5") #save model weights to use later on
+save(history2, file = "models/history2.RData")
 ```
 
 Let's see if we can get an improvement, by correcting the class imbalance. We will use the weight adjustments which we have already calculated for grouping sentences per president.
@@ -724,15 +724,17 @@ model3 %>% compile(
 )
 
 # fit model
-model3 %>%
+history3 = model3 %>%
   fit(x = x_train,
       y = y_train,
       class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2), # balance classes
-      epochs = 50,
+      epochs = 20,
       batch_size = 32,
+      callbacks = list(callback_early_stopping(monitor = "val_loss", min_delta = 0.001, patience = 1, verbose = 0)),
       verbose = 0,
-      validation_data = list(x_test, y_test)) %>%
-  plot()
+      validation_data = list(x_test, y_test))
+
+plot(history3)
 ```
 
 ```{r}
@@ -740,12 +742,14 @@ cat("Train classification success rate = ", mean(model3$predict_classes(x_train)
 cat("Test classification success rate = ", mean(model3$predict_classes(x_test) == predicter_presidents_id[-train.index]))
 ```
 
-Note our overall performance has not improved and sit on 47.8%.
+Note our overall performance has not improved and sit on 45%. It is worst than our first model.
 
 Looking at the confusion matrix we can however see the following improvement:
 
-* deKlerk (ID = 0), we now have 3 correct prediction compared with 0 before.
-* Ramaphosa (ID = 5), we now have 4 correct prediction compared with 2 before.
+* deKlerk (ID = 0), we now have 6 correct prediction compared with 0 before.
+* Ramaphosa (ID = 5), we now also have 6 correct prediction compared with 1 before.
+
+This means that even though our overall performance have decreased, we at least have better performance for the classes which were undersampled.
 
 ```{r}
 table(predicted = model3$predict_classes(x_test), actual = predicter_presidents_id[-train.index])
@@ -754,10 +758,13 @@ table(predicted = model3$predict_classes(x_test), actual = predicter_presidents_
 ```{r}
 save_model_hdf5(model3, "models/Waldo_SONA_model3.h5") #save model to use later on
 save_model_weights_hdf5(model3, "models/Waldo_SONA_model3_weights.h5") #save model weights to use later on
+save(history3, file = "models/history3.RData")
 ```
 
+Sentence summary with stop words:
+
 ```{r}
-# get sentance summary (with stop words)
+# get sentence summary (with stop words)
 sona_sentance_summary_with_stop_words = sona_sentences %>%
   unnest_tokens(word, sentence, token = "words") %>%
   group_by(sentence.id, word) %>%
@@ -774,15 +781,7 @@ sona_sentance_summary_with_stop_words %>%
   select(Total_sentance, Longest_sentance, Average_sentance, Shortest_sentance)
 ```
 
-```{r}
-# view sentances which contain 2 or less words (when stop words are included)
-sona_sentences %>%
-  left_join(sona_sentance_summary_with_stop_words, by = "sentence.id") %>%
-  filter(words <= 2) %>%
-  select(president, year, sentence, words, sentence.id) %>%
-  arrange(words, sentence.id)
-```
-
+Sentence summary without stop words:
 
 ```{r}
 # get sentance summary (without stop words)
@@ -799,31 +798,120 @@ sona_sentance_summary_without_stop_words %>%
   select(Total_sentance, Longest_sentance, Average_sentance, Shortest_sentance)
 ```
 
-```{r}
-# view sentance which contain 2 or less words (when stop words are removed)
-sona_sentences %>%
-  left_join(sona_sentance_summary_without_stop_words, by = "sentence.id") %>%
-  filter(words <= 2) %>%
-  select(president, year, sentence, words, sentence.id) %>%
-  arrange(words, sentence.id)
-```
-
 
 ## CNN with embeddings
 
 Another approach we can onsider is using a Convolutional Neural Network (CNN) which is good when dealing with data in which the input features exhibit some kind of spatial or temporal ordering. CNNs are designed to exploit the structure of ordered data. Their fundamental building block is the convolution filter, which is a small matrix (normally 3x3), which is applied to the data to help extract hidden features.
 We can add embeddings to the CNN, which is simmalar to the latent variables concept we used for building a recommender system.
 
+For this model we will not use the previous sona_matrix object. Instead we will use Keras to tokenize the sentences into sequences will be used as input for the embeddings to the CNN.
+
+We first need to look at a few things to determine the best parameters for the CNN embeddings.
+
+We will start with checking sentence lengths. In other words what is the average number of words per sentence and what is the maximum lenght of sentences we should consider to reprecent 98% of the data?
+Note that for these sentences all stop words and punctuation have been removed. We are using the sona_words object and joining it to sona_sentences to achieve this.
+
 ```{r}
-max_features = 2000       # choose max_features most popular words
-minlen = 5                # exclude sentences shorter than this
-maxlen = 75               # longest sentence (for padding)
-embedding_dims = 10       # number of dimensions for word embedding
+sentence_word_counts = sona_sentences %>%
+  left_join(sona_words, by = "sentence.id") %>%
+  group_by(sentence.id) %>%
+  summarise(count = sum(count, na.rm = T)) %>%
+  select(sentence.id, count) %>%
+  arrange(count)
+
+#plot(x = 1:nrow(sentence_word_counts), y = sentence_word_counts$count)
+hist(sentence_word_counts$count, col = "lightgrey", main = "Histogram of sentence word counts", xlab = "Total words in sentence")
+```
+
+```{r}
+cat("average number of words per sentence is", mean(sentence_word_counts$count), "\n")
+cat("maximum lenght of sentences which reprecent 98% of data is", quantile(sentence_word_counts$count, 0.98), "\n\n")
+
+cat("# sentence with  3 or less words is", sum(sentence_word_counts$count <= 3), "\n")
+cat("# sentence with  4 or less words is", sum(sentence_word_counts$count <= 4), "\n")
+cat("# sentence with  5 or less words is", sum(sentence_word_counts$count <= 5), "\n")
+cat("# sentence with 10 or less words is", sum(sentence_word_counts$count <= 10), "\n")
+cat("# sentence with 29 or less words is", sum(sentence_word_counts$count <= 29), "\n\n")
+
+cat("# sentence with more than  30 words is", sum(sentence_word_counts$count > 30), "\n")
+cat("# sentence with more than  50 words is", sum(sentence_word_counts$count > 50), "\n")
+cat("# sentence with more than  75 words is", sum(sentence_word_counts$count > 75), "\n")
+cat("# sentence with more than 100 words is", sum(sentence_word_counts$count > 100), "\n")
+cat("# sentence with more than 125 words is", sum(sentence_word_counts$count > 125), "\n")
+cat("# sentence with more than 150 words is", sum(sentence_word_counts$count > 150))
+```
+
+
+Check frequency of words accross all sentences to help determine the maximum features to use. In other words, how many unique words should we keep to sill reprecent 95% of the data?
+
+```{r}
+word_counts = sona_words %>%
+  group_by(word) %>%
+  summarise(count = sum(count)) %>%
+  select(word, count) %>%
+  arrange(count)
+
+#plot(x = 1:nrow(word_counts), y = word_counts$count)
+hist(word_counts$count, col = "lightgrey", main = "Histogram of word count occurences", xlab = "Word count")
+```
+
+```{r}
+cat("average frequency of words are", mean(word_counts$count), "\n")
+cat("# words to keep to reprecent 95% of the data is", nrow(word_counts) * 0.95, "\n\n")
+
+cat("# words occuring once is", sum(word_counts$count == 1), "\n")
+cat("# words occuring 2 or less times is", sum(word_counts$count <= 2), "\n")
+cat("# words occuring 3 or less times is", sum(word_counts$count <= 3), "\n")
+cat("# words occuring 4 or less times is", sum(word_counts$count <= 4), "\n")
+cat("# words occuring 5 or less times is", sum(word_counts$count <= 5), "\n\n")
+
+cat("# words used more than once is", sum(word_counts$count > 1), "\n")
+cat("# words used more than   5 times is", sum(word_counts$count > 5), "\n")
+cat("# words used more than  10 times is", sum(word_counts$count > 10), "\n")
+cat("# words used more than  20 times is", sum(word_counts$count > 20), "\n")
+cat("# words used more than  50 times is", sum(word_counts$count > 50), "\n")
+cat("# words used more than 100 times is", sum(word_counts$count > 100), "\n")
+cat("# words used more than 200 times is", sum(word_counts$count > 200))
+```
+
+
+Add a new column to sona_sentences which only contains the core of each sentence, this will be the sentence with all stop words and punctuation removed. This will also match what we have in the sona_words object, but with the added value of having it in string where the order of the words are retained.
+
+```{r}
+core_sentence = vector(length = nrow(sona_sentences))
+
+for (i in 1:nrow(sona_sentences))
+{
+  core_sentence[i] = unnest_tokens(tbl = data_frame(sentence = sona_sentences[i,]$sentence),
+                                    output = word,
+                                    input = sentence, token = "words") %>%
+    filter(!word %in% stop_words$word, str_detect(word, "[a-z]")) %>% # remove stop words
+    unlist() %>% # turn list into character vector
+    paste(collapse = " ") # return singe string from character vector
+}
+
+sona_sentences$core_sentence = core_sentence
+rm(core_sentence)
+
+# as a test display the original and core sentences of one entry
+cat("Original sentence:\n", sona_sentences[2500,]$sentence, sep = "", "\n\n")
+cat("Core sentence:\n", sona_sentences[2500,]$core_sentence, sep = "")
+```
+
+
+We are now ready to build our CNN model.
+
+```{r}
+max_features = 3000       # choose max_features most popular words
+minlen = 2                # exclude sentences shorter than this
+maxlen = 50               # longest sentence (for padding)
+embedding_dims = 50       # number of dimensions for word embedding
+output_shape = 6          # the 6 presidents we want to predict
 
 # use Keras to tokenize the sentences
 tokenizer = text_tokenizer(num_words = max_features)
-fit_text_tokenizer(tokenizer, sona_sentences$sentence)
-sequences = tokenizer$texts_to_sequences(sona_sentences$sentence)
+fit_text_tokenizer(tokenizer, sona_sentences$core_sentence)
+sequences = tokenizer$texts_to_sequences(sona_sentences$core_sentence)
 
 # remove sentences shorter than minlen
 seq_index = unlist(lapply(sequences, length)) > minlen
@@ -871,12 +959,11 @@ model4 %>%
   
   # convolutional layer
   layer_conv_1d(
-    filters = 250,
+    filters = 500,
     kernel_size = 3, 
     padding = 'valid',  # "valid" means no padding, as we did it already
     activation = 'relu', 
-    strides = 1
-  ) %>%
+    strides = 1) %>%
 
   layer_global_max_pooling_1d() %>%
   
@@ -895,20 +982,22 @@ model4 %>% compile(
 )
 
 # fit model
-model4 %>%
+history4 = model4 %>%
   fit(x = x_train_cnn,
       y = y_train_cnn,
-      class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2),
-      epochs = 50,
-      batch_size = 32,
+      epochs = 20,
+      batch_size = 16,
+      callbacks = list(callback_early_stopping(monitor = "val_loss", min_delta = 0.001, patience = 1)),
       verbose = 0,
-      validation_data = list(x_test_cnn, y_test_cnn)) %>%
-  plot()
+      validation_data = list(x_test_cnn, y_test_cnn))
+
+plot(history4)
 ```
 
 ```{r}
 save_model_hdf5(model4, "models/Waldo_SONA_model4.h5") #save model to use later on
 save_model_weights_hdf5(model4, "models/Waldo_SONA_model4_weights.h5") #save model weights to use later on
+save(history4, file = "models/history4.RData")
 ```
 
 ```{r}
@@ -916,40 +1005,206 @@ cat("Train classification success rate = ", mean(model4$predict_classes(x_train_
 cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cnn) == test_cnn$y))
 ```
 
-Model 4 is a good improvement on the previous models. We now have an accuracy of 55.2% where the previous best was 47.8%
+Model 4 is a good improvement on the previous models. We now have an accuracy of 56.9% where the previous best was 49%
 
-
-Let's see if we can improve by using more features and increasing the max length of sentences?
+We have ran 60 previous versions of this model to help determine what the best parameter setting should be. There were 20 tests, where each test was run 3 times and the best test accuracy was recorded. It is difficult to exactly repreduce the keras results from within R as Phyton will set its own random values with a different seed. The following table provide a summary of these tests. Note that parameter values are only displayed when a change to it was made. If no value is displayed in one of the parameter columns then the previous value was used for that specific test.
 
 ```{r}
-max_features = 4000       # choose max_features most popular words
-minlen = 5                # exclude sentences shorter than this
-maxlen = 125              # longest sentence (for padding)
-embedding_dims = 10       # number of dimensions for word embedding
+cnn_parameter_tests = read.csv("cnn_parameter_tests.csv")
+data.frame(cnn_parameter_tests)
+```
 
-# use Keras to tokenize the sentences
-tokenizer = text_tokenizer(num_words = max_features)
-fit_text_tokenizer(tokenizer, sona_sentences$sentence)
-sequences = tokenizer$texts_to_sequences(sona_sentences$sentence)
+We can again try and see if we can improve on this model by correcting the class imbalances. The previous class weights calculated on the sona_sentences object which was use for the sona_matrix cannot be used in this case as we have how exluced short sentences. The following table display the new weights which we should consider for our CNN model:
 
-# remove sentences shorter than minlen
-seq_index = unlist(lapply(sequences, length)) > minlen
+```{r}
+cnn_class_balance = read.csv("cnn_class_balance.csv")
+data.frame(cnn_class_balance)
+```
 
-# exclude short sequences
-lengthIs = function(n) function(x) length(x) > n
-sequences = Filter(lengthIs(minlen), sequences)
 
-# get y predicter
-predicter_presidents_name_cnn = sona_sentences$president[seq_index]
-predicter_presidents_id_cnn = (0:5)[ match(predicter_presidents_name_cnn, c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa") ) ] 
+We can try 3 different approaches:
 
+1. Use the class_weight attribute when fitting the keras model, and set the weights according to how additional sampling should take place. E.g. Zuma (ID=4) have the most sentences and do not require any correction, therefor class weight is 1. deKlerk (ID=0) on the other hand has the least number of sentences and require the biggest correction, which is a class weight of 26.8. The "Class.Balance"" attribute above list these weights.
+2. Also use the keras class_weight attribute, but in this case set the class weights to the partial percentage which the class is contributing to. E.g. for Zuma 36.1% and for deKlerk 1.3%. The "sentence.percentage"" attribute above list these weights. Note that this approach is less common than the first, but still referred to in literature.
+3. Correcting the class imbalances by adding extra samples for the classes which require adjustments. E.g. for Zuma 0 additional samples will be needed, but for deKlerk we will need to add an extra 2294 samples. The "Number.of.additional.samples.needed" attribute above list these extra number of samples required.
+
+
+Approach 1:
+
+```{r}
+# fit model
+history4.1 = model4 %>%
+  fit(x = x_train_cnn,
+      y = y_train_cnn,
+      class_weight = list("0"=26.8, "1"=1.5, "2"=1.0, "3"=9.6, "4"=1.0, "5"=10.7),
+      epochs = 20,
+      batch_size = 16,
+      callbacks = list(callback_early_stopping(monitor = "val_loss", min_delta = 0.001, patience = 1)),
+      verbose = 0,
+      validation_data = list(x_test_cnn, y_test_cnn))
+
+plot(history4.1)
+```
+
+```{r}
+cat("Train classification success rate = ", mean(model4$predict_classes(x_train_cnn) == train_cnn$y), "\n")
+cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cnn) == test_cnn$y))
+```
+
+```{r}
+table(predicted = model4$predict_classes(x_test_cnn), actual = test_cnn$y)
+```
+
+
+Approach 2:
+
+```{r}
+# fit model
+history4.2 = model4 %>%
+  fit(x = x_train_cnn,
+      y = y_train_cnn,
+      class_weight = list("0"=1.3, "1"=22.6, "2"=33.1, "3"=3.6, "4"=36.1, "5"=3.2),
+      epochs = 20,
+      batch_size = 16,
+      callbacks = list(callback_early_stopping(monitor = "val_loss", min_delta = 0.001, patience = 1)),
+      verbose = 0,
+      validation_data = list(x_test_cnn, y_test_cnn))
+
+plot(history4.2)
+```
+
+```{r}
+cat("Train classification success rate = ", mean(model4$predict_classes(x_train_cnn) == train_cnn$y), "\n")
+cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cnn) == test_cnn$y))
+```
+
+```{r}
+table(predicted = model4$predict_classes(x_test_cnn), actual = test_cnn$y)
+```
+
+
+Approach 3:
+
+```{r}
 # build train and test set
 train_cnn = list()
 test_cnn = list()
 
-train.index.cnn = sample(1:length(sequences),
-                         size = 0.8 * length(sequences),
-                         replace = F)
+train.index.main = train.index.cnn # save the original training indexes
+
+# add indexes for correction of class imbalance
+# add extra 2294 samples for deKlerk to correct class imbalances
+train.index.cnn = c(train.index.main,
+                    sample(which(predicter_presidents_name_cnn[train.index.main] == "deKlerk"),
+                           size = 2294,
+                           replace = T))
+# add extra 836 samples for Mandela to correct class imbalances
+train.index.cnn = c(train.index.cnn,
+                    sample(which(predicter_presidents_name_cnn[train.index.main] == "Mandela"),
+                           size = 836,
+                           replace = T))
+# add extra 95 samples for Mbeki to correct class imbalances
+train.index.cnn = c(train.index.cnn,
+                    sample(which(predicter_presidents_name_cnn[train.index.main] == "Mbeki"),
+                           size = 95,
+                           replace = T))
+# add extra 2135 samples for Motlanthe to correct class imbalances
+train.index.cnn = c(train.index.cnn,
+                    sample(which(predicter_presidents_name_cnn[train.index.main] == "Motlanthe"),
+                           size = 2135,
+                           replace = T))
+# add extra 2160 samples for Ramaphosa to correct class imbalances
+train.index.cnn = c(train.index.cnn,
+                    sample(which(predicter_presidents_name_cnn[train.index.main] == "Ramaphosa"),
+                           size = 2160,
+                           replace = T))
+
+# follow usual steps from here
+train_cnn$x = sequences[train.index.cnn]
+test_cnn$x =  sequences[-train.index.cnn]
+
+train_cnn$y = predicter_presidents_id_cnn[train.index.cnn]
+test_cnn$y =  predicter_presidents_id_cnn[-train.index.cnn]
+
+# padd shorter sequences with zeros
+x_train_cnn = train_cnn$x %>% pad_sequences(maxlen = maxlen)
+x_test_cnn = test_cnn$x %>% pad_sequences(maxlen = maxlen)
+
+# one hot encoding
+y_train_cnn = to_categorical(train_cnn$y)
+y_test_cnn = to_categorical(test_cnn$y)
+
+# initiate model
+model4 = keras_model_sequential()
+
+# define model layers
+model4 %>% 
+  # embedding layer maps vocab indices into embedding_dims dimensions
+  layer_embedding(max_features, embedding_dims, input_length = maxlen) %>%
+  
+  # add some dropout
+  layer_dropout(0.2) %>%
+  
+  # convolutional layer
+  layer_conv_1d(
+    filters = 500,
+    kernel_size = 3, 
+    padding = 'valid',  # "valid" means no padding, as we did it already
+    activation = 'relu', 
+    strides = 1) %>%
+
+  layer_global_max_pooling_1d() %>%
+  
+  layer_dense(units = 128,
+              activation = 'relu') %>%
+  layer_dropout(0.2) %>%
+
+  layer_dense(units = output_shape) %>%
+  layer_activation('softmax')
+
+# compile model
+model4 %>% compile(
+  optimizer = 'adam',
+  loss = 'categorical_crossentropy',
+  metrics = c('accuracy')
+)
+
+# fit model
+history4.3 = model4 %>%
+  fit(x = x_train_cnn,
+      y = y_train_cnn,
+      epochs = 20,
+      batch_size = 16,
+      callbacks = list(callback_early_stopping(monitor = "val_loss", min_delta = 0.001, patience = 1)),
+      verbose = 0,
+      validation_data = list(x_test_cnn, y_test_cnn))
+
+plot(history4.3)
+```
+
+```{r}
+cat("Train classification success rate = ", mean(model4$predict_classes(x_train_cnn) == train_cnn$y), "\n")
+cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cnn) == test_cnn$y))
+```
+
+```{r}
+table(predicted = model4$predict_classes(x_test_cnn), actual = test_cnn$y)
+```
+
+We can compare the approaches either on accuracy per president or average accuracy.
+When using accuracy per president, then approach 1 is better.
+When using average accuracy, then approach 2 is better.
+
+## Expanding on CNN with embeddings
+
+We can try and make our CNN model better by adding more convolutional layers. For the next model we will use the same basis as for model4 by keeping the same max_features, minlen, maxlen and embedding_dims.
+
+```{r}
+# build train and test set
+train_cnn = list()
+test_cnn = list()
+
+train.index.cnn = train.index.main # use same training index as for the first CNN model
 
 train_cnn$x = sequences[train.index.cnn]
 test_cnn$x =  sequences[-train.index.cnn]
@@ -976,14 +1231,29 @@ model5 %>%
   # add some dropout
   layer_dropout(0.2) %>%
   
-  # convolutional layer
+  # 1st convolutional layer
   layer_conv_1d(
-    filters = 250,
+    filters = 500,
+    kernel_size = 2, 
+    padding = 'valid',  # "valid" means no padding, as we did it already
+    activation = 'relu', 
+    strides = 1) %>%
+
+  # 2nd convolutional layer
+  layer_conv_1d(
+    filters = 500,
     kernel_size = 3, 
     padding = 'valid',  # "valid" means no padding, as we did it already
     activation = 'relu', 
-    strides = 1
-  ) %>%
+    strides = 1) %>%
+
+  # 3rd convolutional layer
+  layer_conv_1d(
+    filters = 500,
+    kernel_size = 4, 
+    padding = 'valid',  # "valid" means no padding, as we did it already
+    activation = 'relu', 
+    strides = 1) %>%
 
   layer_global_max_pooling_1d() %>%
   
@@ -1002,20 +1272,22 @@ model5 %>% compile(
 )
 
 # fit model
-model5 %>%
+history5 = model5 %>%
   fit(x = x_train_cnn,
       y = y_train_cnn,
-      class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2),
-      epochs = 50,
-      batch_size = 32,
+      epochs = 20,
+      batch_size = 16,
+      callbacks = list(callback_early_stopping(monitor = "val_loss", min_delta = 0.001, patience = 3)), # increase patience from 1 to 3
       verbose = 0,
-      validation_data = list(x_test_cnn, y_test_cnn)) %>%
-  plot()
+      validation_data = list(x_test_cnn, y_test_cnn))
+
+plot(history5)
 ```
 
 ```{r}
 save_model_hdf5(model5, "models/Waldo_SONA_model5.h5") #save model to use later on
 save_model_weights_hdf5(model5, "models/Waldo_SONA_model5_weights.h5") #save model weights to use later on
+save(history5, file = "models/history5.RData")
 ```
 
 ```{r}
@@ -1023,52 +1295,14 @@ cat("Train classification success rate = ", mean(model5$predict_classes(x_train_
 cat("Test classification success rate = ", mean(model5$predict_classes(x_test_cnn) == test_cnn$y))
 ```
 
-The outcome is not better, which means it is better to have a more general model.
+This model only achieved an accuracy of 54.5% which is not better than our first CNN model which achieved 56.9%. It seems that a more general approach worked better than to add to many extra layers.
+
+
+## RNN
+
+We can also look at a Recurrent Neural Network (RNN) which is similar to a CNN, where the output depends not only on the present inputs but also on the previous step’s neuron state. We can also use Keras to build a RNN and use the Long Short-Term Memory (LSTM) layer.
 
 ```{r}
-max_features = 2000       # choose max_features most popular words
-minlen = 5                # exclude sentences shorter than this
-maxlen = 75               # longest sentence (for padding)
-embedding_dims = 30       # number of dimensions for word embedding
-
-# use Keras to tokenize the sentences
-tokenizer = text_tokenizer(num_words = max_features)
-fit_text_tokenizer(tokenizer, sona_sentences$sentence)
-sequences = tokenizer$texts_to_sequences(sona_sentences$sentence)
-
-# remove sentences shorter than minlen
-seq_index = unlist(lapply(sequences, length)) > minlen
-
-# exclude short sequences
-lengthIs = function(n) function(x) length(x) > n
-sequences = Filter(lengthIs(minlen), sequences)
-
-# get y predicter
-predicter_presidents_name_cnn = sona_sentences$president[seq_index]
-predicter_presidents_id_cnn = (0:5)[ match(predicter_presidents_name_cnn, c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa") ) ] 
-
-# build train and test set
-train_cnn = list()
-test_cnn = list()
-
-train.index.cnn = sample(1:length(sequences),
-                         size = 0.8 * length(sequences),
-                         replace = F)
-
-train_cnn$x = sequences[train.index.cnn]
-test_cnn$x =  sequences[-train.index.cnn]
-
-train_cnn$y = predicter_presidents_id_cnn[train.index.cnn]
-test_cnn$y =  predicter_presidents_id_cnn[-train.index.cnn]
-
-# padd shorter sequences with zeros
-x_train_cnn = train_cnn$x %>% pad_sequences(maxlen = maxlen)
-x_test_cnn = test_cnn$x %>% pad_sequences(maxlen = maxlen)
-
-# one hot encoding
-y_train_cnn = to_categorical(train_cnn$y)
-y_test_cnn = to_categorical(test_cnn$y)
-
 # initiate model
 model6 = keras_model_sequential()
 
@@ -1080,17 +1314,9 @@ model6 %>%
   # add some dropout
   layer_dropout(0.2) %>%
   
-  # convolutional layer
-  layer_conv_1d(
-    filters = 250,
-    kernel_size = 3, 
-    padding = 'valid',  # "valid" means no padding, as we did it already
-    activation = 'relu', 
-    strides = 1
-  ) %>%
+  # add long short-term memory layer
+  layer_lstm(128, input_shape = c(maxlen, ncol(x_train_cnn))) %>%
 
-  layer_global_max_pooling_1d() %>%
-  
   layer_dense(units = 128,
               activation = 'relu') %>%
   layer_dropout(0.2) %>%
@@ -1106,23 +1332,60 @@ model6 %>% compile(
 )
 
 # fit model
-model6 %>%
+history6 = model6 %>%
   fit(x = x_train_cnn,
       y = y_train_cnn,
-      class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2),
-      epochs = 50,
-      batch_size = 32,
+      #class_weight = list("0"=26.8, "1"=1.5, "2"=1.0, "3"=9.6, "4"=1.0, "5"=10.7),
+      epochs = 20,
+      batch_size = 16,
+      callbacks = list(callback_early_stopping(monitor = "val_loss", min_delta = 0.001, patience = 1)),
       verbose = 0,
-      validation_data = list(x_test_cnn, y_test_cnn)) %>%
-  plot()
+      validation_data = list(x_test_cnn, y_test_cnn))
+
+plot(history6)
 ```
 
 ```{r}
 save_model_hdf5(model6, "models/Waldo_SONA_model6.h5") #save model to use later on
 save_model_weights_hdf5(model6, "models/Waldo_SONA_model6_weights.h5") #save model weights to use later on
+save(history6, file = "models/history6.RData")
 ```
 
 ```{r}
 cat("Train classification success rate = ", mean(model6$predict_classes(x_train_cnn) == train_cnn$y), "\n")
 cat("Test classification success rate = ", mean(model6$predict_classes(x_test_cnn) == test_cnn$y))
 ```
+
+The RNN is fairly simple model and have a reasonable accuracy when compared to our previous models.
+
+
+## Make some predictions
+
+Let's look at some predictions
+
+```{r}
+# select 5 random test sentence
+test_index = sample((1:length(sequences))[-train.index.main], size = 5, replace = F)
+
+j = 0
+for (i in test_index)
+{
+  j = j +1
+  cat("TEST", j, "\n")
+  cat("======", "\n\n")
+  cat("Original sentence:\n", sona_sentences[i,]$sentence, sep = "", "\n\n")
+  cat("Core sentence:\n", sona_sentences[i,]$core_sentence, sep = "", "\n\n")
+  cat("Actual president:", sona_sentences[i,]$president, "\n")
+  cat("Predicted president:", sona_sentences[i,]$president, "\n\n")
+}
+```
+
+
+## Conclusion
+
+
+
+
+
+
+

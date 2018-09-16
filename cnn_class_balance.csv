@@ -1,0 +1,7 @@
+id,president,sentence.count,sentence.percentage,Class Balance %,Correct sampling using the Class Balance %,Number of additional samples needed
+0,deKlerk,89,1.32,26.8,2383,2294
+1,Mandela,1547,22.63,1.5,2383,836
+2,Mbeki,2288,33.1,1,2383,95
+3,Motlanthe,248,3.6,9.6,2383,2135
+4,Zuma,2383,36.12,1,2383,0
+5,Ramaphosa,223,3.23,10.7,2383,2160
