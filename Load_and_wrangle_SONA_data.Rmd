@@ -205,3 +205,7 @@ sona_sentences %>%
 save(sona_files, sona_data, sona_sentences, sona_words, sona_matrix, predicter_presidents_name, file = "Main_SONA_objects.R")
 ```
 
+```{r}
+# Test GIT 2
+```
+
