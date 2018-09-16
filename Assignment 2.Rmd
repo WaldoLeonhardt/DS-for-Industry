@@ -177,8 +177,6 @@ Clean matrix by moving the sentence.id into the row name, and adding the preside
 # create predicter vector of president names
 predicter_presidents_name = sona_sentences[sona_sentences$sentence.id %in% sona_matrix$sentence.id,]$president
 
-
-
 sona_rownames = sona_matrix$sentence.id
 
 # remove sentence.id
@@ -279,11 +277,10 @@ As an example, in the below we can see the word 'absolut' has probabilities of '
 library(tidytext)
 sona_topics <- tidy(sona_lda, matrix = "beta") 
  head(sona_topics)
+```
 
-<<<<<<< HEAD
+
 ## TF-IDF
-
-
 
 ```{r fig.width=8, fig.height=10}
 
@@ -320,6 +317,7 @@ sona_words_tfidf %>%
 ## Bag-of-words
 
 ```{r}
+library(rpart)
 set.seed(123)
 
 sona_bow = sona_words %>% 
@@ -345,14 +343,11 @@ head(sona_bow)
 head(train_bow)
 head(test_bow)
 
-
 fit <- rpart(factor(president_sona) ~ ., train_bow)
-
 
 options(repr.plot.width=8, repr.plot.height=10)
 plot(fit, main="Full Classification Tree")
 text(fit, use.n=TRUE, all=TRUE, cex=.8)
-
 
 fittedtrain <- predict(fit,type="class")
 predtrain <- table(train_bow$president_sona,fittedtrain)
@@ -363,15 +358,11 @@ fittedtest <- predict(fit,newdata=test_bow,type="class")
 predtest <- table(test_bow$president_sona,fittedtest)
 predtest
 sum(diag(predtest))/sum(predtest) # test accuracy
-
-
 ```
 
 ## Bag-of-words - with tfidf
 
 ```{r}
-
-
 sona_bow_tfidf <- sona_words_tfidf %>% 
   ungroup() %>% 
   select(president_sona, sentence.id, word_sona, tf_idf) %>%  # note the change, using tf-idf
@@ -402,9 +393,7 @@ head(sona_bow_tfidf)
 head(train_bow_tfidf)
 head(test_bow_tfidf)
 
-
 fit_tfidf <- rpart(factor(president_sona) ~ ., train_bow_tfidf)
-
 
 options(repr.plot.width=8, repr.plot.height=10)
 plot(fit_tfidf, main="Full Classification Tree")
@@ -420,15 +409,6 @@ fittedtest_tfidf <- predict(fit,newdata=test_bow_tfidf,type="class")
 predtest_tfidf <- table(test_bow_tfidf$president_sona,fittedtest_tfidf)
 predtest_tfidf
 sum(diag(predtest_tfidf))/sum(predtest_tfidf) # test accuracy
-
-
-
-
-
-
-
-
-=======
 ```
   
 Now we extract the top 5 words per topic and plot it to display visually:
@@ -516,12 +496,8 @@ beta_spread %>%
   labs(title="Log2 ratio of beta in topic 6 / topic 1", x="Words", y="Ratio") +
   geom_col() +
   coord_flip()
->>>>>>> 909b2a5840d7e18d52156b2aa5e0ce2a5be74854
-
-
-
 ```
-<<<<<<< HEAD
+
 
 ## Feed-forward neural network - with tfidf
 
@@ -633,11 +609,9 @@ cat("Test classification success rate = ", mean(model1$predict_classes(test_bow_
 
 
 
-
 ## CNN tfidf
 
 ```{r}
-
 library(keras)
 set.seed(123)
 
@@ -830,23 +804,8 @@ model6 %>%
       batch_size = 32,
       validation_data = list(test_bow_tfidf_x, test_bow_tfidf_y)) %>%
   plot()
-
-
-
 ```
 
-
-
-
-
-
-
-
-
-### --------------------------------------------------------------------------------------
-
-## Feed-forward neural network
-=======
   
 Interpreting the log ratio differences, we see the below when we compare each topic to topic 1 (to shed more light on the meaning and inclusion/exclusion of the topics):  
 Topic 1 (Development and programmes) differs from topic 2 (African/country identity) the most by words like $even$ from topic 2 and $discharge$ seen mostly in topic 1. Topic 1 also include words like $truth$ and $instances$ which makes sense considering it is about development and programmes as opposed to identity. 
@@ -903,7 +862,6 @@ Below shows the sentiments for specific words.
 ```{r}
 get_sentiments("bing") %>% head(10)
 ```
->>>>>>> 909b2a5840d7e18d52156b2aa5e0ce2a5be74854
 
 We use our tidyframe that is tokenised by words (not stemmed) and add the sentiment analysis on this. The result is as below. Note we change all the NA words to neutral for clarity.
  
@@ -1672,6 +1630,7 @@ table(predicted = model4$predict_classes(x_test_cnn), actual = test_cnn$y)
 We can compare the approaches either on accuracy per president or average accuracy.
 When using accuracy per president, then approach 1 is better.
 When using average accuracy, then approach 2 is better.
+
 
 ## Expanding on CNN with embeddings
 
