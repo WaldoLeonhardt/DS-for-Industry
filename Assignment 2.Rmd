@@ -257,6 +257,9 @@ head(sona_tdf)
 Then we cast this into a DocumentTermMatrix.  
   
 ```{r}
+library(topicmodels)
+library(tidyverse)
+library(tidytext)
 dtm_sona <- sona_tdf %>% 
   cast_dtm(president, word, n)
 
@@ -265,10 +268,6 @@ dtm_sona <- sona_tdf %>%
 Latent Dirichlet Allocation will be used for topic modelling. It basically labels a topic as a mixture of words and a document as a mixture of topics. 
   
 ```{r}
-library(topicmodels)
-library(tidyverse)
-library(tidytext)
-set.seed(123)
 sona_lda <- LDA(dtm_sona, k = 6, control=list(seed=123))
 #sona_lda
 #str(sona_lda)
