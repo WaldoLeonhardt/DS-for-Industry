@@ -2,4 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
+<<<<<<< HEAD
 checkpoints.h5
+=======
+Assignment 2.nb.html
+Assignment 2.nb.html
+*.html
+>>>>>>> 5bdf978e36f177fae63f2d238932c1e85111a5db
