@@ -9,7 +9,7 @@ output: html_notebook
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Introduction
+## Introduction 
 
 This is the second assignment for Data Science for Industry where the goal is to use as input the State of the Nation Address (SONA) speeches from 1994 to 2018 and achieve the following:
 
@@ -183,7 +183,7 @@ sona_rownames = sona_matrix$sentence.id
 sona_matrix = sona_matrix[,-1]
 
 sona_colnames = colnames(sona_matrix)
-
+sona_tibble = sona_matrix
 # turn into a matrix
 sona_matrix = as.matrix(sona_matrix)
 
@@ -229,7 +229,7 @@ sona_sentences %>%
   arrange(sentence.count)
 ```
   
-##Topic modelling
+## Topic modelling
 
 We want to investigate what topics the SONA speeches touched on. As we have no idea how many topics there might be, we take a value of 6 (1 per president) as this will make the most sense intuitively. Our aim is to name and interpret the topics.   
   
@@ -248,12 +248,12 @@ head(sona_tdf)
   
 Then we cast this into a DocumentTermMatrix.  
   
-```{r}
+```{r, warning=FALSE, message=FALSE}
 library(topicmodels)
 library(tidyverse)
 library(tidytext)
-dtm_sona <- sona_tdf %>% 
-  cast_dtm(president, word, n)
+dtm_sona =  cast_dtm(sona_tdf, president, word, n)
+
 ```
   
 Latent Dirichlet Allocation will be used for topic modelling. It basically labels a topic as a mixture of words and a document as a mixture of topics. 
@@ -264,7 +264,7 @@ sona_lda <- LDA(dtm_sona, k = 6, control=list(seed=123))
 #str(sona_lda)
 ```
     
-###Investigating what our topics are about  
+### Investigating what our topics are about  
   
 We need to focus on 2 parameters to establish what our topics are about:
   
@@ -279,138 +279,6 @@ sona_topics <- tidy(sona_lda, matrix = "beta")
  head(sona_topics)
 ```
 
-
-## TF-IDF
-
-```{r fig.width=8, fig.height=10}
-
-# president is also a word in the text, so rename to be safe
-sona_words = sona_words %>% 
-  rename(president_sona = president, year_sona = year, word_sona = word, count_sona = count)
- 
-
-# Using built in function (https://www.tidytextmining.com/tfidf.html)
-sona_words_tfidf = sona_words %>%  bind_tf_idf(word_sona, sentence.id , count_sona)
-# head(sona_words)
-# dim(sona_words)
-
-# sona_words %>% arrange(desc(tf_idf))
-# head(arrange(sona_words,desc(tf_idf)))
-
-
-sona_words_tfidf %>%
-  arrange(desc(tf_idf)) %>%
-  mutate(word_sona = factor(word_sona, levels = rev(unique(word_sona)))) %>% 
-  group_by(president_sona) %>% 
-  arrange(desc(tf_idf)) %>%
-  top_n(15) %>% 
-  ungroup %>%
-  ggplot(aes(x = reorder(word_sona,tf_idf,max), y = tf_idf, fill = president_sona)) +
-  geom_col(show.legend = FALSE) +
-  labs(x = NULL, y = "tf-idf") +
-  facet_wrap(~president_sona, ncol = 2, scales = "free") +
-  coord_flip()
-
-```
-
-
-## Bag-of-words
-
-```{r}
-library(rpart)
-set.seed(123)
-
-sona_bow = sona_words %>% 
-  spread(word_sona,count_sona,fill = 0)
-
-train_ids <- sona_bow %>% 
-  group_by(president_sona) %>% 
-  sample_frac(0.6) %>% 
-  ungroup() %>%
-  select(sentence.id)
-
-train_bow <- sona_bow %>% 
-  ungroup() %>%
-  right_join(train_ids, by = "sentence.id") %>%
-  select(-year_sona, -sentence.id)
-
-test_bow <- sona_bow %>% 
-  ungroup() %>%
-  anti_join(train_ids, by = "sentence.id") %>%
-  select(-year_sona, -sentence.id)
-
-head(sona_bow)
-head(train_bow)
-head(test_bow)
-
-fit <- rpart(factor(president_sona) ~ ., train_bow)
-
-options(repr.plot.width=8, repr.plot.height=10)
-plot(fit, main="Full Classification Tree")
-text(fit, use.n=TRUE, all=TRUE, cex=.8)
-
-fittedtrain <- predict(fit,type="class")
-predtrain <- table(train_bow$president_sona,fittedtrain)
-predtrain
-sum(diag(predtrain))/sum(predtrain) # training accuracy
-
-fittedtest <- predict(fit,newdata=test_bow,type="class")
-predtest <- table(test_bow$president_sona,fittedtest)
-predtest
-sum(diag(predtest))/sum(predtest) # test accuracy
-```
-
-## Bag-of-words - with tfidf
-
-```{r}
-sona_bow_tfidf <- sona_words_tfidf %>% 
-  ungroup() %>% 
-  select(president_sona, sentence.id, word_sona, tf_idf) %>%  # note the change, using tf-idf
-  group_by(president_sona) %>% 
-  top_n(2000) %>% 
-  ungroup() %>% 
-  spread(key = word_sona, value = tf_idf, fill = 0) 
-
-head(sona_bow_tfidf)
-
-train_ids_tfidf <- sona_bow_tfidf %>% 
-  group_by(president_sona) %>% 
-  sample_frac(0.7) %>% 
-  ungroup() %>%
-  select(sentence.id)
-
-train_bow_tfidf <- sona_bow_tfidf %>% 
-  ungroup() %>%
-  right_join(train_ids_tfidf, by = "sentence.id") %>%
-  select(-sentence.id)
-
-test_bow_tfidf <- sona_bow_tfidf %>% 
-  ungroup() %>%
-  anti_join(train_ids_tfidf, by = "sentence.id") %>%
-  select( -sentence.id)
-
-head(sona_bow_tfidf)
-head(train_bow_tfidf)
-head(test_bow_tfidf)
-
-fit_tfidf <- rpart(factor(president_sona) ~ ., train_bow_tfidf)
-
-options(repr.plot.width=8, repr.plot.height=10)
-plot(fit_tfidf, main="Full Classification Tree")
-text(fit_tfidf, use.n=TRUE, all=TRUE, cex=.8)
-
-
-fittedtrain_tfidf <- predict(fit,type="class")
-predtrain_tfidf <- table(train_bow_tfidf$president_sona,fittedtrain_tfidf)
-predtrain_tfidf
-sum(diag(predtrain_tfidf))/sum(predtrain_tfidf) # training accuracy
-
-fittedtest_tfidf <- predict(fit,newdata=test_bow_tfidf,type="class")
-predtest_tfidf <- table(test_bow_tfidf$president_sona,fittedtest_tfidf)
-predtest_tfidf
-sum(diag(predtest_tfidf))/sum(predtest_tfidf) # test accuracy
-```
-  
 Now we extract the top 5 words per topic and plot it to display visually:
   
 ```{r}
@@ -498,315 +366,6 @@ beta_spread %>%
   coord_flip()
 ```
 
-
-## Feed-forward neural network - with tfidf
-
-```{r}
-library(keras)
-set.seed(123)
-
-sona_bow_tfidf <- sona_words_tfidf %>% 
-  ungroup() %>% 
-  select(president_sona, sentence.id, word_sona, tf_idf) %>%  # note the change, using tf-idf
-  group_by(president_sona) %>% 
-  top_n(2000) %>% 
-  ungroup() %>% 
-  spread(key = word_sona, value = tf_idf, fill = 0) 
-
-pres_lookup = as.tibble(as.matrix(cbind(pres_nr = as.numeric(c(0,1,2,3,4,5)) ,
-              president_sona = c('deKlerk','Mandela','Mbeki','Motlanthe','Zuma','Ramaphosa'))))
-
-sona_bow_tfidf = sona_bow_tfidf %>%
-  left_join(pres_lookup, by = "president_sona") %>%
-  select(president_sona, pres_nr, sentence.id, everything())
-
-unique(sona_bow_tfidf$pres_nr)
-
-train_ids <- sona_bow_tfidf %>% 
-  group_by(president_sona) %>% 
-  sample_frac(0.7) %>% 
-  ungroup() %>%
-  select(sentence.id)
-
-train_bow_tfidf <- sona_bow_tfidf %>%
-  ungroup() %>%
-  right_join(train_ids, by = "sentence.id") %>%
-  select(-sentence.id)
-
-unique(train_bow_tfidf$pres_nr)
-
-test_bow_tfidf <- sona_bow_tfidf %>%
-  ungroup() %>%
-  anti_join(train_ids, by = "sentence.id") %>%
-  select(-sentence.id)
-
-train_bow_tfidf_x = select(train_bow_tfidf,-pres_nr, -president_sona)
-train_bow_tfidf_x = as.matrix(train_bow_tfidf_x)
-
-train_bow_tfidf_y = train_bow_tfidf %>%
-                      mutate(pres_nr = as.numeric(pres_nr)) %>%
-                      select(pres_nr)
-train_bow_tfidf_yc = to_categorical(as.numeric(as.matrix(train_bow_tfidf_y)))
-
-test_bow_tfidf_x = select(test_bow_tfidf,-pres_nr, -president_sona)
-test_bow_tfidf_x = as.matrix(test_bow_tfidf_x)
-
-test_bow_tfidf_y = test_bow_tfidf %>%
-                      mutate(pres_nr = as.numeric(pres_nr)) %>%
-                      select(pres_nr)
-test_bow_tfidf_yc = to_categorical(as.numeric(as.matrix(test_bow_tfidf_y)))
-
-dim(train_bow_tfidf_x)
-dim(train_bow_tfidf_y)
-dim(test_bow_tfidf_x)
-dim(test_bow_tfidf_y)
-
-input_shape = ncol(train_bow_tfidf_x) # the number of destinct words
-output_shape = ncol(test_bow_tfidf_yc) # the 6 presidents we want to predict
-
-model1 = keras_model_sequential()
-
-# define model layers
-model1 %>% 
-  layer_dense(units = 0.6*(input_shape + output_shape), #6517,   number of neurons in 1st hidden layer, use 2/3 of (input_shape + output_shape)
-  input_shape = input_shape) %>%           # dimension of input array
-  layer_activation('relu') %>%             # use a rectified linear unit as an activation function in the hidden layer
-  layer_dense(units = output_shape) %>%    # adds an output layer to the network
-  layer_activation('softmax')              # use softmax activation function in the output layer
-
-# compile model
-model1 %>% compile(
-  optimizer = 'adam',
-  loss = 'categorical_crossentropy',
-  metrics = c('accuracy')
-)
-
-# fit model
-model1 %>%
-  fit(x = train_bow_tfidf_x,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
-      y = train_bow_tfidf_yc,
-      epochs = 15,
-      batch_size = 32,
-      validation_data = list(test_bow_tfidf_x, test_bow_tfidf_yc)) %>%
-  plot()
-```
-
-
-Save model
-
-```{r}
-save_model_hdf5(model1, "Waldo_SONA_model1.h5") #save model to use later on
-save_model_weights_hdf5(model1, "Waldo_SONA_model1_weights.h5") #save model weights to use later on
-```
-
-
-Compare train and test accuracy
-
-```{r}
-cat("Train classification success rate = ", mean(model1$predict_classes(train_bow_tfidf_x) == train_bow_tfidf_y), "\n")
-cat("Test classification success rate = ", mean(model1$predict_classes(test_bow_tfidf_x) == test_bow_tfidf_y))
-```
-
-
-
-## CNN tfidf
-
-```{r}
-library(keras)
-set.seed(123)
-
-sona_bow_tfidf <- sona_words_tfidf %>% 
-  ungroup() %>% 
-  select(president_sona, sentence.id, word_sona, tf_idf) %>%  # note the change, using tf-idf
-  group_by(president_sona) %>% 
-  top_n(2000) %>% 
-  ungroup() %>% 
-  spread(key = word_sona, value = tf_idf, fill = 0) 
-
-pres_lookup = as.tibble(as.matrix(cbind(pres_nr = as.numeric(c(0,1,2,3,4,5)) ,
-              president_sona = c('deKlerk','Mandela','Mbeki','Motlanthe','Zuma','Ramaphosa'))))
-
-sona_bow_tfidf = sona_bow_tfidf %>%
-  left_join(pres_lookup, by = "president_sona") %>%
-  select(president_sona, pres_nr, sentence.id, everything())
-
-unique(sona_bow_tfidf$pres_nr)
-
-train_ids <- sona_bow_tfidf %>% 
-  group_by(president_sona) %>% 
-  sample_frac(0.7) %>% 
-  ungroup() %>%
-  select(sentence.id)
-
-train_bow_tfidf <- sona_bow_tfidf %>%
-  ungroup() %>%
-  right_join(train_ids, by = "sentence.id") %>%
-  select(-sentence.id)
-
-unique(train_bow_tfidf$pres_nr)
-
-test_bow_tfidf <- sona_bow_tfidf %>%
-  ungroup() %>%
-  anti_join(train_ids, by = "sentence.id") %>%
-  select(-sentence.id)
-
-train_bow_tfidf_x = select(train_bow_tfidf,-pres_nr, -president_sona)
-train_bow_tfidf_x = as.matrix(train_bow_tfidf_x)
-
-train_bow_tfidf_y = train_bow_tfidf %>%
-                      mutate(pres_nr = as.numeric(pres_nr)) %>%
-                      select(pres_nr)
-train_bow_tfidf_yc = to_categorical(as.numeric(as.matrix(train_bow_tfidf_y)))
-
-test_bow_tfidf_x = select(test_bow_tfidf,-pres_nr, -president_sona)
-test_bow_tfidf_x = as.matrix(test_bow_tfidf_x)
-
-test_bow_tfidf_y = test_bow_tfidf %>%
-                      mutate(pres_nr = as.numeric(pres_nr)) %>%
-                      select(pres_nr)
-test_bow_tfidf_yc = to_categorical(as.numeric(as.matrix(test_bow_tfidf_y)))
-
-dim(train_bow_tfidf_x)
-dim(train_bow_tfidf_y)
-dim(test_bow_tfidf_x)
-dim(test_bow_tfidf_y)
-
-input_shape = ncol(train_bow_tfidf_x) # the number of destinct words
-output_shape = ncol(test_bow_tfidf_yc) # the 6 presidents we want to predict
-
-
-
-# max_features = ncol(train_bow_tfidf_x) #2000       # choose max_features most popular words
-# minlen = 5                # exclude sentences shorter than this
-# maxlen = 75               # longest sentence (for padding)
-# embedding_dims = 30       # number of dimensions for word embedding
-# 
-# # use Keras to tokenize the sentences
-# tokenizer = text_tokenizer(num_words = max_features)
-# fit_text_tokenizer(tokenizer, sona_sentences$sentence)
-# sequences = tokenizer$texts_to_sequences(sona_sentences$sentence)
-# 
-# # remove sentences shorter than minlen
-# seq_index = unlist(lapply(sequences, length)) > minlen
-# 
-# # exclude short sequences
-# lengthIs = function(n) function(x) length(x) > n
-# sequences = Filter(lengthIs(minlen), sequences)
-# 
-# # get y predicter
-# predicter_presidents_name_cnn = sona_sentences$president[seq_index]
-# predicter_presidents_id_cnn = (0:5)[ match(predicter_presidents_name_cnn, c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa") ) ] 
-# 
-# # build train and test set
-# train_cnn = list()
-# test_cnn = list()
-# 
-# train.index.cnn = sample(1:length(sequences),
-#                          size = 0.8 * length(sequences),
-#                          replace = F)
-# 
-# train_cnn$x = sequences[train.index.cnn]
-# test_cnn$x =  sequences[-train.index.cnn]
-# 
-# train_cnn$y = predicter_presidents_id_cnn[train.index.cnn]
-# test_cnn$y =  predicter_presidents_id_cnn[-train.index.cnn]
-# 
-# # padd shorter sequences with zeros
-# x_train_cnn = train_cnn$x %>% pad_sequences(maxlen = maxlen)
-# x_test_cnn = test_cnn$x %>% pad_sequences(maxlen = maxlen)
-# 
-# # one hot encoding
-# y_train_cnn = to_categorical(train_cnn$y)
-# y_test_cnn = to_categorical(test_cnn$y)
-# 
-# 
-# dim(x_train_cnn)
-# dim(y_train_cnn)
-# dim(x_test_cnn)
-# dim(y_test_cnn)
-
-# initiate model
-
-
-
-# model %>%
-#   layer_conv_2d(filters = 32,                      # number of convolution filters in conv layer 1
-#                 kernel_size = c(3,3),              # use 3 x 3 convolution filter in conv layer 1
-#                 input_shape = c(28, 28, 1)) %>%    # shape of input data
-#   layer_activation('relu') %>%                     # activation function in conv layer 1
-#   layer_dropout(rate = 0.20) %>%                   # apply 20% dropout after conv layer 1
-#   layer_conv_2d(filters = 64,                      # number of convolution filters in conv layer 2
-#                 kernel_size = c(3,3)) %>%          # also use 3 x 3 filter in conv layer 2
-#   layer_activation('relu') %>%                     # activation function in conv layer 2
-#   layer_max_pooling_2d(pool_size = c(2, 2)) %>%    # apply max pooling after conv layer 2
-#   layer_flatten() %>%                              # flatten output into a vector
-#   layer_dense(units = 10, activation = 'softmax')  # fully connected to output layer
-
-
-dim(train_bow_tfidf_x) <- c(nrow(train_bow_tfidf_x), ncol(train_bow_tfidf_x), 1)
-dim(test_bow_tfidf_x) <- c(nrow(test_bow_tfidf_x), ncol(test_bow_tfidf_x), 1) 
-# dim(x_test) <- c(nrow(x_test), 28, 28, 1)
-
-
-model6 = keras_model_sequential()
-
-# define model layers
-model6 %>% 
-   # layer_dense(units = ncol(train_bow_tfidf_x)/2,                   # number of neurons in 1st hidden layer
-   #             activation = 'relu',              # use a rectified linear unit as an activation function in 1st hidden layer
-   #             input_shape = c(ncol(train_bow_tfidf_x),nrow(train_bow_tfidf_x))
-   #             ) %>%
-   # 
-   # # add some dropout
-   # layer_dropout(0.2) %>%
-   # 
-  layer_conv_1d(filters = 250,
-    kernel_size = 3,
-    activation = 'relu',
-    strides = 1,
-    input_shape = c(ncol(train_bow_tfidf_x),1)
-    ) %>%
-
-   # # add some dropout
-   # layer_dropout(0.2) %>%
-   
-  # # convolutional layer
-  # layer_conv_1d(
-  #   filters = 250,
-  #   kernel_size = 3,
-  #   # padding = 'valid',  # "valid" means no padding, as we did it already
-  #   activation = 'relu',
-  #   strides = 1
-  # ) %>%
-  # 
-  #  layer_global_max_pooling_1d() %>%
-  # 
-  #  layer_dense(units = 128,
-  #              activation = 'relu') %>%
-  #  layer_dropout(0.2) %>%
-
-  layer_dense(units = 6) %>%
-  layer_activation('softmax')
-
-# compile model
-model6 %>% compile(
-  optimizer = 'adam',
-  loss = 'categorical_crossentropy',
-  metrics = c('accuracy')
-)
-
-# fit model
-model6 %>%
-  fit(x = train_bow_tfidf_x,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
-      y = train_bow_tfidf_y,
-      class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2),
-      epochs = 5,
-      batch_size = 32,
-      validation_data = list(test_bow_tfidf_x, test_bow_tfidf_y)) %>%
-  plot()
-```
-
-  
 Interpreting the log ratio differences, we see the below when we compare each topic to topic 1 (to shed more light on the meaning and inclusion/exclusion of the topics):  
 Topic 1 (Development and programmes) differs from topic 2 (African/country identity) the most by words like $even$ from topic 2 and $discharge$ seen mostly in topic 1. Topic 1 also include words like $truth$ and $instances$ which makes sense considering it is about development and programmes as opposed to identity. 
 Topic 3 (Country improvement and development) differs from topic 1 with words such as $Diligent$ and $Even$ used in topic 3 and topic 1 has more words regarding $Centenary$ and $own$ used that we do not see in topic 3.
@@ -814,7 +373,7 @@ Topic 4 (Inclusion and ensuring) also inclused words like $diligent$ and $even$ 
 Topic 5 (Constitution) differs also by using words like $even$ and $diligent$ but it contains far fewer occurences of topic 1 words like $compatriot$, $limpopo$ and $graduation$.
 Topic 6 (Continuous) contains words like $even$ and $diligence$, but fewer $discharge$ and $government$ words than topic 1. 
     
-##Document topic probabilities  
+## Document topic probabilities  
 Gamma is the mixture of topics per president, so the below table shows which topic is used by which president. 
   
 ```{r}
@@ -841,7 +400,7 @@ Motlanthe took over from Mbeki and we see his speech mainly consisted of topic 3
 
 Zuma's speeches mainly covered topic 6 (continuous) but we see his successor, Ramaphose, only covered topic 2 (African country/identity.) So the past 3 presidents (Motlanthe, Zuma and Ramaphosa) all had an element of the African country/identity in their speeches, but Motlanthe focused on this far more than his predecessors. 
   
-##Wordclouds for our presidents  
+## Wordclouds for our presidents  
 We can use our stem-words to show the most used words per president. For the example below, we show the most used (stem) words of Mandela in a word cloud of 25 words as shown below. As expected, the words $govern$, $nation$ and $people$ stand out.  
   
 ```{r}
@@ -853,7 +412,7 @@ sona_tdf %>%
   
 It would be interesting to do sentiment analysis per president (or per year) to see how the context of SONAs changed - was it more negative or positive?  
 
-##Sentiment analysis  
+## Sentiment analysis  
 
 We use the bing lexicon (words are labelled as positive or negative) to get an idea of each president's speech, but also see how sentiment changed over time. Note we will not do this on the stem words, but on the actual words, as the sentiment is dependant on more than the stem words itself, so we need to keep the whole word in.
 
@@ -953,6 +512,585 @@ ggplot(sona_sent_plot, aes(x = as.numeric(year), y = sentiment_norm)) +
 From the above we can see that de Klerk's speech was quite negative, this was a very uncertain time for the country and it comes across in his speech's negativity. Mandela focused a lot on building community (improvement topic) and uniting the nation, which inherently is more positive words. Generally speaking, the trend continued to increase positively when Mbeki took over from Mandela in 2000. We can see the ratio flattening around 2005 and the sentiment ratio of Mbeki was almost as low in 2008 as when he started his presidency in 2000. The year of 2008 is also the year that the world-wide recession hit and the outlook was indeed bleak that year. 
 
 Motlanthe took over for a short while until Zuma could be president in 2009. Zuma was very positive in 2010 and 2011, but thereafter (with the exception of 2015) he did not reach such positive sentiment ratios again. An interesting trend we see is that each president, when it is their last SONA, ended with a SONA that has a sentiment ratio below (more negative than) the smooth average curve drawn above. Zuma also ended his SONA with a negative ratio and Ramaphosa was very positive again when he became president in 2018. 
+
+## Bigram Sentiment with Negation
+
+It is interestin to note that, when employng Negation, the initial negative sentiment of De Klerk, based on words without negation, has changed to be positive. Additionally, the elevated positive sentiment between 2002 to 2007, has been reduced. Unlike the non-negated word sentiment analysis, negation also highlights a steeper negative trend from 2016 onwards. The  trend that each president, when it is their last SONA, ended with a SONA that has a sentiment ratio below (more negative than) the smooth average curve drawn above, is however maintained.
+
+
+
+```{r, message=FALSE}
+
+bigrams_separated  = sona_sentences %>%
+  mutate(sentence = str_replace_all(sentence, replace_reg, "")) %>%
+  unnest_tokens(bigram, sentence, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+bigrams_separated <- bigrams_separated %>% 
+    # add sentiment for word 1
+    left_join(get_sentiments("bing"), by = c(word1 = "word")) %>%
+    rename(sentiment1 = sentiment) %>%
+    mutate(sentiment1 = ifelse(is.na(sentiment1), "neutral", sentiment1)) %>%
+    
+    # add sentiment for word 1
+    left_join(get_sentiments("bing"), by = c(word2 = "word")) %>%
+    rename(sentiment2 = sentiment) %>%
+    mutate(sentiment2 = ifelse(is.na(sentiment2), "neutral", sentiment2)) %>%
+    select(president,word1,word2,sentiment1,sentiment2,everything())
+# head(bigrams_separated)
+
+negation_words <- c("not", "no", "never", "without")
+
+# show a few
+filter(bigrams_separated, word1 %in% negation_words, sentiment2  != "neutral") %>% 
+    head(10) %>% select(president, word1, word2, sentiment1, sentiment2) # for display purposes
+
+bigrams_separated <- bigrams_separated %>%   
+  
+    # create a variable that is the opposite of sentiment2
+    mutate(opp_sentiment2 = recode(sentiment2, "positive" = "negative",
+                                 "negative" = "positive",
+                                 "neutral" = "neutral")) %>%
+    
+    # reverse sentiment2 if word1 is a negation word
+    mutate(sentiment2 = ifelse(word1 %in% negation_words, opp_sentiment2, sentiment2)) %>%
+    
+    # remove the opposite sentiment variable, which we don't need any more
+    select(-opp_sentiment2)
+
+bigrams_separated <- bigrams_separated %>%
+  mutate(net_sentiment = (sentiment1 == "positive") + (sentiment2 == "positive") - 
+              (sentiment1 == "negative") - (sentiment2 == "negative")) %>%
+  unite(bigram, word1, word2, sep = " ", remove = FALSE)
+
+bigrams_separated %>%
+  filter(net_sentiment > 0) %>% # get positive bigrams
+  count(bigram, sort = TRUE) %>%
+  filter(rank(desc(n)) < 20) %>%
+  ggplot(aes(reorder(bigram,n),n)) + geom_col() + coord_flip() + xlab("") + labs(title = "Count of Positive Bi-grams", x = "Count")
+
+bigrams_separated %>%
+  filter(net_sentiment < 0) %>% # get negative bigrams
+  count(bigram, sort = TRUE) %>%
+  filter(rank(desc(n)) < 20) %>%
+  ggplot(aes(reorder(bigram,n),n)) + geom_col() + coord_flip() + xlab("") + labs(title = "Count of Negative Bi-grams", x = "Count")
+
+bigrams_separated %>%
+    filter(net_sentiment > 0) %>% # get Positive bigrams
+    filter(word1 %in% negation_words) %>% # get bigrams where first word is negation
+    count(bigram, sort = TRUE) %>%
+    filter(rank(desc(n)) < 20) %>%
+    ggplot(aes(reorder(bigram,n),n)) + geom_col() + coord_flip() + xlab("") + labs(title = "Count of Postive Bi-grams where 1st word is negation.", x = "Count")
+
+bigrams_separated %>%
+    filter(net_sentiment < 0) %>% # get negative bigrams
+    filter(word1 %in% negation_words) %>% # get bigrams where first word is negation
+    count(bigram, sort = TRUE) %>%
+    filter(rank(desc(n)) < 20) %>%
+    ggplot(aes(reorder(bigram,n),n)) + geom_col() + coord_flip() + xlab("") + labs(title = "Count of Negative Bi-grams where 1st word is negation.", x = "Count")
+
+
+bigrams_separated_ratio = bigrams_separated %>% 
+  ungroup() %>%
+  select(year, president, net_sentiment) %>%  
+  group_by(president,year) %>%
+  summarise(sentiment_norm = sum(net_sentiment)/n())
+
+# bigrams_separated_ratio
+
+# plot of sentiment over time & automatically choose a method to model the change
+ggplot(bigrams_separated_ratio, aes(x = as.numeric(year), y = sentiment_norm)) + 
+  geom_point(aes(color = president))+ # add points to our plot, color-coded by president
+  geom_smooth(method = "auto") + # pick a method & fit a model
+  labs(title="Sentiment ratio over time per president with Negation", x="Year", y="Ratio of (sum(Bigram sentiment)/total bigrams") +
+   scale_x_continuous(breaks = c( seq(1994, 2018, 2)))  
+
+
+
+```
+
+
+## Term Frequency - Inverse Document Frequency (TF-IDF)
+TF-IDF is a method of assigning weight to more important words in documents. It comprises of 2 separate indicators, which combines to produce the final weight.
+
+1. Term frequency (TF) : This is a calculation of how frequent a term is found in a document, and is given by the number of occurrences of the term in a document, divided by the number of terms in that document. \n
+
+$ TF_{ij} = \frac{Occurrences_{ij}}{Terms_j}} $ for all terms i in document j. \n
+
+2. Inverse document Frequency : This is the natural log (Ln) of the total number of documents, divided by the number of documents in which the term appears. \n
+$ IDF_i = Ln({\frac{Documents_{Tot}}{DocumentsWithTerm_i})} $ for all terms i
+
+The simple multiplication of these 2 values produce the tf-idf for each term in each document. Applying the *bind_tf_idf* function in r to the SONA word tibble, adds the TF, IDF and TF-IDF features to the tibble. The 6 figures below show the top 10 most important words of each president.
+
+It would seem that over the years, the perceived political weight of the words decreased over time. As such, presidents De Klerk and Mandela used words with big political implication such as "autonomy", "volkstaat", "constitution", "democracy" and "truth, while the later presidents had less of such "heavy-weight" terms in their top 10 most important words.
+
+```{r fig.width=8, fig.height=10}
+
+# head(sona_data)
+
+# president is also a word in the text, so rename to be safe
+sona_bow = sona_data %>% rename(president_sona = president) %>%
+  unnest_tokens(word_sona, speech, token = "words") %>%
+  filter(!word_sona %in% stop_words$word,str_detect(word_sona, "[a-z]")) %>%
+  group_by(president_sona, word_sona) %>%
+  summarise(count_sona = n()) %>%
+  ungroup()
+
+ # head(sona_bow)
+
+# Using built in function (https://www.tidytextmining.com/tfidf.html)
+sona_bow_tfidf = sona_bow %>% 
+  bind_tf_idf(word_sona, president_sona, count_sona)
+
+# head(sona_bow_tfidf)
+# sona_bow_tfidf %>% group_by(president_sona) %>% summarise(n())
+
+
+# Plotting the top 10 most important words per president 
+sona_bow_tfidf %>%
+  group_by(president_sona) %>% 
+  arrange(desc(tf_idf)) %>%
+  # mutate(word_sona = factor(word_sona, levels = rev(unique(word_sona)))) %>% 
+  top_n(10) %>% 
+  ungroup %>%
+  ggplot(aes(x = reorder(word_sona,tf_idf,min), y = tf_idf, fill = president_sona)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~president_sona, ncol = 2, scales = "free") +
+  coord_flip()
+
+
+```
+
+
+## Bag of Words
+Bag-of-Words is structured representation of the words used in sets of documents (*corpus*). In the "Bag", the order, punctuation and subtle implication ("between the lines" meaning) of each word is disregarded, and merely the occurrence count per document is maintained in the representation. Such Bag-of-words information sets and often used as input to descriptive and predictive modelling. 
+
+To illustrate this, a simple tree model is fitted on the SONA data, using the president's name as the "document" identifier. Which yielded a training accuracy of 43% and at test accuracy of 42%. (Better models can be build using the bag-of-words dataset, as is shown later in this document.)
+
+
+```{r}
+library(rpart)
+set.seed(123)
+
+sona_bow = sona_words %>% 
+  rename(president_sona = president, word_sona = word, count_sona = count, year_sona = year) %>%
+  spread(word_sona,count_sona,fill = 0)
+
+train_ids <- sona_bow %>% 
+  group_by(president_sona) %>% 
+  sample_frac(0.6) %>% 
+  ungroup() %>%
+  select(sentence.id)
+
+train_bow <- sona_bow %>% 
+  ungroup() %>%
+  right_join(train_ids, by = "sentence.id") %>%
+  select(-year_sona, -sentence.id)
+
+test_bow <- sona_bow %>% 
+  ungroup() %>%
+  anti_join(train_ids, by = "sentence.id") %>%
+  select(-year_sona, -sentence.id)
+
+# head(sona_bow)
+# head(train_bow)
+# head(test_bow)
+
+fit <- rpart(factor(president_sona) ~ ., train_bow)
+
+options(repr.plot.width=8, repr.plot.height=10)
+plot(fit, main="Full Classification Tree")
+text(fit, use.n=TRUE, all=TRUE, cex=.7)
+
+fittedtrain <- predict(fit,type="class")
+predtrain <- table(train_bow$president_sona,fittedtrain)
+predtrain
+sum(diag(predtrain))/sum(predtrain) # training accuracy
+
+fittedtest <- predict(fit,newdata=test_bow,type="class")
+predtest <- table(test_bow$president_sona,fittedtest)
+predtest
+sum(diag(predtest))/sum(predtest) # test accuracy
+```
+
+## Bag of Words with TF-IDF
+An alternative implementation for Bag-of-Words is to replace the word occurrence count per document with the term frequency - inverse document frequency (tf-idf) of each word. This could enhance the value of the bag-of-words by giving weight to more important words used in the documents. 
+
+Again, to illustrate the use, a simple tree model is fitted on the SONA data, using tf-idf in this case, and the president's name as the "document" identifier. In this case marginally better training accuracy of 44% and at test accuracy of only 10% were achieved.
+(Note that the number of words were limited to the top 2000 based on TF-IDF.)
+
+
+```{r}
+
+
+
+library(rpart)
+set.seed(123)
+
+head(sona_words)
+sona_words_tfidf = sona_words %>% 
+  rename(president_sona = president, word_sona = word, count_sona = count, year_sona = year) %>%
+  bind_tf_idf(word_sona, sentence.id, count_sona)
+head(sona_words_tfidf)
+
+sona_bow_tfidf = sona_words_tfidf %>% 
+  group_by(president_sona) %>% 
+  top_n(2000,tf_idf) %>% 
+  ungroup() %>% 
+  spread(word_sona,tf_idf,fill = 0)
+head(sona_bow_tfidf)
+
+train_ids_tfidf <- sona_bow_tfidf %>% 
+  group_by(president_sona) %>% 
+  sample_frac(0.6) %>% 
+  ungroup() %>%
+  select(sentence.id)
+
+train_bow_tfidf <- sona_bow_tfidf %>% 
+  ungroup() %>%
+  right_join(train_ids_tfidf, by = "sentence.id") %>%
+  select(-year_sona, -sentence.id)
+
+test_bow_tfidf <- sona_bow_tfidf %>% 
+  ungroup() %>%
+  anti_join(train_ids_tfidf, by = "sentence.id") %>%
+  select(-year_sona, -sentence.id)
+
+head(sona_bow_tfidf)
+head(train_bow_tfidf)
+head(test_bow_tfidf)
+
+fit_tfidf <- rpart(factor(president_sona) ~ ., train_bow_tfidf)
+
+options(repr.plot.width=8, repr.plot.height=10)
+plot(fit_tfidf, main="Full Classification Tree with TF-IDF")
+text(fit_tfidf, use.n=TRUE, all=TRUE, cex=.7)
+
+fittedtrain_tfidf <- predict(fit_tfidf,type="class")
+predtrain_tfidf <- table(train_bow_tfidf$president_sona,fittedtrain_tfidf)
+predtrain_tfidf
+sum(diag(predtrain_tfidf))/sum(predtrain_tfidf) # training accuracy
+
+fittedtest_tfidf <- predict(fit_tfidf,newdata=test_bow_tfidf,type="class")
+predtest_tfidf <- table(test_bow_tfidf$president_sona,fittedtest_tfidf)
+predtest_tfidf
+sum(diag(predtest_tfidf))/sum(predtest_tfidf) # test accuracy
+
+
+```
+
+## Feed-forward neural network - with tfidf
+
+```{r}
+library(keras)
+set.seed(123)
+
+# sona_bow_tfidf <- sona_words_tfidf %>% 
+#   ungroup() %>% 
+#   select(president_sona, sentence.id, word_sona, tf_idf) %>%  # note the change, using tf-idf
+#   group_by(president_sona) %>% 
+#   top_n(2000) %>% 
+#   ungroup() %>% 
+#   spread(key = word_sona, value = tf_idf, fill = 0) 
+
+pres_lookup = as.tibble(as.matrix(cbind(pres_nr = as.numeric(c(0,1,2,3,4,5)) ,
+              president_sona = c('deKlerk','Mandela','Mbeki','Motlanthe','Zuma','Ramaphosa'))))
+
+sona_bow_tfidf = sona_bow_tfidf %>%
+  left_join(pres_lookup, by = "president_sona") %>%
+  select(president_sona, pres_nr, sentence.id, everything())
+
+unique(sona_bow_tfidf$pres_nr)
+
+train_ids <- sona_bow_tfidf %>% 
+  group_by(president_sona) %>% 
+  sample_frac(0.7) %>% 
+  ungroup() %>%
+  select(sentence.id)
+
+train_bow_tfidf <- sona_bow_tfidf %>%
+  ungroup() %>%
+  right_join(train_ids, by = "sentence.id") %>%
+  select(-sentence.id)
+
+unique(train_bow_tfidf$pres_nr)
+
+test_bow_tfidf <- sona_bow_tfidf %>%
+  ungroup() %>%
+  anti_join(train_ids, by = "sentence.id") %>%
+  select(-sentence.id)
+
+train_bow_tfidf_x = select(train_bow_tfidf,-pres_nr, -president_sona)
+train_bow_tfidf_x = as.matrix(train_bow_tfidf_x)
+
+train_bow_tfidf_y = train_bow_tfidf %>%
+                      mutate(pres_nr = as.numeric(pres_nr)) %>%
+                      select(pres_nr)
+train_bow_tfidf_yc = to_categorical(as.numeric(as.matrix(train_bow_tfidf_y)))
+
+test_bow_tfidf_x = select(test_bow_tfidf,-pres_nr, -president_sona)
+test_bow_tfidf_x = as.matrix(test_bow_tfidf_x)
+
+test_bow_tfidf_y = test_bow_tfidf %>%
+                      mutate(pres_nr = as.numeric(pres_nr)) %>%
+                      select(pres_nr)
+test_bow_tfidf_yc = to_categorical(as.numeric(as.matrix(test_bow_tfidf_y)))
+
+dim(train_bow_tfidf_x)
+dim(train_bow_tfidf_y)
+dim(test_bow_tfidf_x)
+dim(test_bow_tfidf_y)
+
+input_shape = ncol(train_bow_tfidf_x) # the number of destinct words
+output_shape = ncol(test_bow_tfidf_yc) # the 6 presidents we want to predict
+
+model1 = keras_model_sequential()
+
+# define model layers
+model1 %>% 
+  layer_dense(units = 0.6*(input_shape + output_shape), #6517,   number of neurons in 1st hidden layer, use 2/3 of (input_shape + output_shape)
+  input_shape = input_shape) %>%           # dimension of input array
+  layer_activation('relu') %>%             # use a rectified linear unit as an activation function in the hidden layer
+  layer_dense(units = output_shape) %>%    # adds an output layer to the network
+  layer_activation('softmax')              # use softmax activation function in the output layer
+
+# compile model
+model1 %>% compile(
+  optimizer = 'adam',
+  loss = 'categorical_crossentropy',
+  metrics = c('accuracy')
+)
+
+# fit model
+model1 %>%
+  fit(x = train_bow_tfidf_x,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
+      y = train_bow_tfidf_yc,
+      epochs = 1,
+      batch_size = 32,
+      validation_data = list(test_bow_tfidf_x, test_bow_tfidf_yc)) %>%
+  plot()
+```
+
+
+Save model
+
+```{r}
+save_model_hdf5(model1, "Waldo_SONA_model1.h5") #save model to use later on
+save_model_weights_hdf5(model1, "Waldo_SONA_model1_weights.h5") #save model weights to use later on
+```
+
+
+Compare train and test accuracy
+
+```{r}
+cat("Train classification success rate = ", mean(model1$predict_classes(train_bow_tfidf_x) == train_bow_tfidf_y), "\n")
+cat("Test classification success rate = ", mean(model1$predict_classes(test_bow_tfidf_x) == test_bow_tfidf_y))
+```
+
+
+
+
+
+```{r}
+
+## CNN tfidf commented out
+
+# library(keras)
+# set.seed(123)
+# 
+# sona_bow_tfidf <- sona_words_tfidf %>% 
+#   ungroup() %>% 
+#   select(president_sona, sentence.id, word_sona, tf_idf) %>%  # note the change, using tf-idf
+#   group_by(president_sona) %>% 
+#   top_n(2000) %>% 
+#   ungroup() %>% 
+#   spread(key = word_sona, value = tf_idf, fill = 0) 
+# 
+# pres_lookup = as.tibble(as.matrix(cbind(pres_nr = as.numeric(c(0,1,2,3,4,5)) ,
+#               president_sona = c('deKlerk','Mandela','Mbeki','Motlanthe','Zuma','Ramaphosa'))))
+# 
+# sona_bow_tfidf = sona_bow_tfidf %>%
+#   left_join(pres_lookup, by = "president_sona") %>%
+#   select(president_sona, pres_nr, sentence.id, everything())
+# 
+# unique(sona_bow_tfidf$pres_nr)
+# 
+# train_ids <- sona_bow_tfidf %>% 
+#   group_by(president_sona) %>% 
+#   sample_frac(0.7) %>% 
+#   ungroup() %>%
+#   select(sentence.id)
+# 
+# train_bow_tfidf <- sona_bow_tfidf %>%
+#   ungroup() %>%
+#   right_join(train_ids, by = "sentence.id") %>%
+#   select(-sentence.id)
+# 
+# unique(train_bow_tfidf$pres_nr)
+# 
+# test_bow_tfidf <- sona_bow_tfidf %>%
+#   ungroup() %>%
+#   anti_join(train_ids, by = "sentence.id") %>%
+#   select(-sentence.id)
+# 
+# train_bow_tfidf_x = select(train_bow_tfidf,-pres_nr, -president_sona)
+# train_bow_tfidf_x = as.matrix(train_bow_tfidf_x)
+# 
+# train_bow_tfidf_y = train_bow_tfidf %>%
+#                       mutate(pres_nr = as.numeric(pres_nr)) %>%
+#                       select(pres_nr)
+# train_bow_tfidf_yc = to_categorical(as.numeric(as.matrix(train_bow_tfidf_y)))
+# 
+# test_bow_tfidf_x = select(test_bow_tfidf,-pres_nr, -president_sona)
+# test_bow_tfidf_x = as.matrix(test_bow_tfidf_x)
+# 
+# test_bow_tfidf_y = test_bow_tfidf %>%
+#                       mutate(pres_nr = as.numeric(pres_nr)) %>%
+#                       select(pres_nr)
+# test_bow_tfidf_yc = to_categorical(as.numeric(as.matrix(test_bow_tfidf_y)))
+# 
+# dim(train_bow_tfidf_x)
+# dim(train_bow_tfidf_y)
+# dim(test_bow_tfidf_x)
+# dim(test_bow_tfidf_y)
+# 
+# input_shape = ncol(train_bow_tfidf_x) # the number of destinct words
+# output_shape = ncol(test_bow_tfidf_yc) # the 6 presidents we want to predict
+# 
+# 
+# 
+# # max_features = ncol(train_bow_tfidf_x) #2000       # choose max_features most popular words
+# # minlen = 5                # exclude sentences shorter than this
+# # maxlen = 75               # longest sentence (for padding)
+# # embedding_dims = 30       # number of dimensions for word embedding
+# # 
+# # # use Keras to tokenize the sentences
+# # tokenizer = text_tokenizer(num_words = max_features)
+# # fit_text_tokenizer(tokenizer, sona_sentences$sentence)
+# # sequences = tokenizer$texts_to_sequences(sona_sentences$sentence)
+# # 
+# # # remove sentences shorter than minlen
+# # seq_index = unlist(lapply(sequences, length)) > minlen
+# # 
+# # # exclude short sequences
+# # lengthIs = function(n) function(x) length(x) > n
+# # sequences = Filter(lengthIs(minlen), sequences)
+# # 
+# # # get y predicter
+# # predicter_presidents_name_cnn = sona_sentences$president[seq_index]
+# # predicter_presidents_id_cnn = (0:5)[ match(predicter_presidents_name_cnn, c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa") ) ] 
+# # 
+# # # build train and test set
+# # train_cnn = list()
+# # test_cnn = list()
+# # 
+# # train.index.cnn = sample(1:length(sequences),
+# #                          size = 0.8 * length(sequences),
+# #                          replace = F)
+# # 
+# # train_cnn$x = sequences[train.index.cnn]
+# # test_cnn$x =  sequences[-train.index.cnn]
+# # 
+# # train_cnn$y = predicter_presidents_id_cnn[train.index.cnn]
+# # test_cnn$y =  predicter_presidents_id_cnn[-train.index.cnn]
+# # 
+# # # padd shorter sequences with zeros
+# # x_train_cnn = train_cnn$x %>% pad_sequences(maxlen = maxlen)
+# # x_test_cnn = test_cnn$x %>% pad_sequences(maxlen = maxlen)
+# # 
+# # # one hot encoding
+# # y_train_cnn = to_categorical(train_cnn$y)
+# # y_test_cnn = to_categorical(test_cnn$y)
+# # 
+# # 
+# # dim(x_train_cnn)
+# # dim(y_train_cnn)
+# # dim(x_test_cnn)
+# # dim(y_test_cnn)
+# 
+# # initiate model
+# 
+# 
+# 
+# # model %>%
+# #   layer_conv_2d(filters = 32,                      # number of convolution filters in conv layer 1
+# #                 kernel_size = c(3,3),              # use 3 x 3 convolution filter in conv layer 1
+# #                 input_shape = c(28, 28, 1)) %>%    # shape of input data
+# #   layer_activation('relu') %>%                     # activation function in conv layer 1
+# #   layer_dropout(rate = 0.20) %>%                   # apply 20% dropout after conv layer 1
+# #   layer_conv_2d(filters = 64,                      # number of convolution filters in conv layer 2
+# #                 kernel_size = c(3,3)) %>%          # also use 3 x 3 filter in conv layer 2
+# #   layer_activation('relu') %>%                     # activation function in conv layer 2
+# #   layer_max_pooling_2d(pool_size = c(2, 2)) %>%    # apply max pooling after conv layer 2
+# #   layer_flatten() %>%                              # flatten output into a vector
+# #   layer_dense(units = 10, activation = 'softmax')  # fully connected to output layer
+# 
+# 
+# dim(train_bow_tfidf_x) <- c(nrow(train_bow_tfidf_x), ncol(train_bow_tfidf_x), 1)
+# dim(test_bow_tfidf_x) <- c(nrow(test_bow_tfidf_x), ncol(test_bow_tfidf_x), 1) 
+# # dim(x_test) <- c(nrow(x_test), 28, 28, 1)
+# 
+# 
+# model6 = keras_model_sequential()
+# 
+# # define model layers
+# model6 %>% 
+#    # layer_dense(units = ncol(train_bow_tfidf_x)/2,                   # number of neurons in 1st hidden layer
+#    #             activation = 'relu',              # use a rectified linear unit as an activation function in 1st hidden layer
+#    #             input_shape = c(ncol(train_bow_tfidf_x),nrow(train_bow_tfidf_x))
+#    #             ) %>%
+#    # 
+#    # # add some dropout
+#    # layer_dropout(0.2) %>%
+#    # 
+#   layer_conv_1d(filters = 250,
+#     kernel_size = 3,
+#     activation = 'relu',
+#     strides = 1,
+#     input_shape = c(ncol(train_bow_tfidf_x),1)
+#     ) %>%
+# 
+#    # # add some dropout
+#    # layer_dropout(0.2) %>%
+#    
+#   # # convolutional layer
+#   # layer_conv_1d(
+#   #   filters = 250,
+#   #   kernel_size = 3,
+#   #   # padding = 'valid',  # "valid" means no padding, as we did it already
+#   #   activation = 'relu',
+#   #   strides = 1
+#   # ) %>%
+#   # 
+#   #  layer_global_max_pooling_1d() %>%
+#   # 
+#   #  layer_dense(units = 128,
+#   #              activation = 'relu') %>%
+#   #  layer_dropout(0.2) %>%
+# 
+#   layer_dense(units = 6) %>%
+#   layer_activation('softmax')
+# 
+# # compile model
+# model6 %>% compile(
+#   optimizer = 'adam',
+#   loss = 'categorical_crossentropy',
+#   metrics = c('accuracy')
+# )
+# 
+# # fit model
+# model6 %>%
+#   fit(x = train_bow_tfidf_x,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
+#       y = train_bow_tfidf_y,
+#       class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2),
+#       epochs = 5,
+#       batch_size = 32,
+#       validation_data = list(test_bow_tfidf_x, test_bow_tfidf_y)) %>%
+#   plot()
+```
+
+  
 
 
 ## Feed-forward neural network
