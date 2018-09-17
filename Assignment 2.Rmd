@@ -518,11 +518,10 @@ Motlanthe took over for a short while until Zuma could be president in 2009. Zum
 It is interestin to note that, when employng Negation, the initial negative sentiment of De Klerk, based on words without negation, has changed to be positive. Additionally, the elevated positive sentiment between 2002 to 2007, has been reduced. Unlike the non-negated word sentiment analysis, negation also highlights a steeper negative trend from 2016 onwards. The  trend that each president, when it is their last SONA, ended with a SONA that has a sentiment ratio below (more negative than) the smooth average curve drawn above, is however maintained.
 
 
-
 ```{r, message=FALSE}
 
 bigrams_separated  = sona_sentences %>%
-  mutate(sentence = str_replace_all(sentence, replace_reg, "")) %>%
+  #mutate(sentence = str_replace_all(sentence, replace_reg, "")) %>%
   unnest_tokens(bigram, sentence, token = "ngrams", n = 2) %>%
   separate(bigram, c("word1", "word2"), sep = " ")
 
@@ -605,8 +604,6 @@ ggplot(bigrams_separated_ratio, aes(x = as.numeric(year), y = sentiment_norm)) +
   labs(title="Sentiment ratio over time per president with Negation", x="Year", y="Ratio of (sum(Bigram sentiment)/total bigrams") +
    scale_x_continuous(breaks = c( seq(1994, 2018, 2)))  
 
-
-
 ```
 
 
@@ -659,7 +656,6 @@ sona_bow_tfidf %>%
   facet_wrap(~president_sona, ncol = 2, scales = "free") +
   coord_flip()
 
-
 ```
 
 
@@ -697,22 +693,28 @@ test_bow <- sona_bow %>%
 # head(train_bow)
 # head(test_bow)
 
-fit <- rpart(factor(president_sona) ~ ., train_bow)
+bow_fit <- rpart(factor(president_sona) ~ ., train_bow)
 
 options(repr.plot.width=8, repr.plot.height=10)
-plot(fit, main="Full Classification Tree")
-text(fit, use.n=TRUE, all=TRUE, cex=.7)
+plot(bow_fit, main="Full Classification Tree")
+text(bow_fit, use.n=TRUE, all=TRUE, cex=.7)
 
-fittedtrain <- predict(fit,type="class")
+fittedtrain <- predict(bow_fit,type="class")
 predtrain <- table(train_bow$president_sona,fittedtrain)
 predtrain
 sum(diag(predtrain))/sum(predtrain) # training accuracy
 
-fittedtest <- predict(fit,newdata=test_bow,type="class")
+fittedtest <- predict(bow_fit,newdata=test_bow,type="class")
 predtest <- table(test_bow$president_sona,fittedtest)
 predtest
 sum(diag(predtest))/sum(predtest) # test accuracy
 ```
+
+Save objects
+```{r}
+save(sona_bow, train_ids, train_bow, test_bow, bow_fit, fittedtrain, predtrain, fittedtest, predtest, file = "models/BOW.RData")
+```
+
 
 ## Bag of Words with TF-IDF
 An alternative implementation for Bag-of-Words is to replace the word occurrence count per document with the term frequency - inverse document frequency (tf-idf) of each word. This could enhance the value of the bag-of-words by giving weight to more important words used in the documents. 
@@ -722,9 +724,6 @@ Again, to illustrate the use, a simple tree model is fitted on the SONA data, us
 
 
 ```{r}
-
-
-
 library(rpart)
 set.seed(123)
 
@@ -777,8 +776,13 @@ predtest_tfidf <- table(test_bow_tfidf$president_sona,fittedtest_tfidf)
 predtest_tfidf
 sum(diag(predtest_tfidf))/sum(predtest_tfidf) # test accuracy
 
-
 ```
+
+Save objects
+```{r}
+save(sona_words_tfidf, sona_bow_tfidf, train_ids_tfidf, train_bow_tfidf, test_bow_tfidf, fit_tfidf, fittedtrain_tfidf, predtrain_tfidf, fittedtest_tfidf, predtest_tfidf, file = "models/TFIDF.RData")
+```
+
 
 ## Feed-forward neural network - with tfidf
 
@@ -845,10 +849,10 @@ dim(test_bow_tfidf_y)
 input_shape = ncol(train_bow_tfidf_x) # the number of destinct words
 output_shape = ncol(test_bow_tfidf_yc) # the 6 presidents we want to predict
 
-model1 = keras_model_sequential()
+model7 = keras_model_sequential()
 
 # define model layers
-model1 %>% 
+model7 %>% 
   layer_dense(units = 0.6*(input_shape + output_shape), #6517,   number of neurons in 1st hidden layer, use 2/3 of (input_shape + output_shape)
   input_shape = input_shape) %>%           # dimension of input array
   layer_activation('relu') %>%             # use a rectified linear unit as an activation function in the hidden layer
@@ -856,40 +860,40 @@ model1 %>%
   layer_activation('softmax')              # use softmax activation function in the output layer
 
 # compile model
-model1 %>% compile(
+model7 %>% compile(
   optimizer = 'adam',
   loss = 'categorical_crossentropy',
   metrics = c('accuracy')
 )
 
 # fit model
-model1 %>%
-  fit(x = train_bow_tfidf_x,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
+history7 = model7 %>%
+  fit(x = train_bow_tfidf_x,
       y = train_bow_tfidf_yc,
       epochs = 1,
       batch_size = 32,
-      validation_data = list(test_bow_tfidf_x, test_bow_tfidf_yc)) %>%
-  plot()
+      validation_data = list(test_bow_tfidf_x, test_bow_tfidf_yc))
+
+plot(history7)
 ```
 
 
 Save model
 
 ```{r}
-save_model_hdf5(model1, "Waldo_SONA_model1.h5") #save model to use later on
-save_model_weights_hdf5(model1, "Waldo_SONA_model1_weights.h5") #save model weights to use later on
+save_model_hdf5(model7, "models/FE_SONA_model7.h5") #save model to use later on
+save_model_weights_hdf5(model7, "models/FE_SONA_model7_weights.h5") #save model weights to use later on
+save(history7, file = "models/history7.RData")
+save(pres_lookup, sona_bow_tfidf, train_ids, train_bow_tfidf, test_bow_tfidf, train_bow_tfidf_x, train_bow_tfidf_y, train_bow_tfidf_yc, test_bow_tfidf_x, test_bow_tfidf_y, test_bow_tfidf_yc, input_shape, output_shape, file = "models/NN_TFIDF.RData")
 ```
 
 
 Compare train and test accuracy
 
 ```{r}
-cat("Train classification success rate = ", mean(model1$predict_classes(train_bow_tfidf_x) == train_bow_tfidf_y), "\n")
-cat("Test classification success rate = ", mean(model1$predict_classes(test_bow_tfidf_x) == test_bow_tfidf_y))
+cat("Train classification success rate = ", mean(model7$predict_classes(train_bow_tfidf_x) == train_bow_tfidf_y), "\n")
+cat("Test classification success rate = ", mean(model7$predict_classes(test_bow_tfidf_x) == test_bow_tfidf_y))
 ```
-
-
-
 
 
 ```{r}
@@ -1032,10 +1036,10 @@ cat("Test classification success rate = ", mean(model1$predict_classes(test_bow_
 # # dim(x_test) <- c(nrow(x_test), 28, 28, 1)
 # 
 # 
-# model6 = keras_model_sequential()
+# model8 = keras_model_sequential()
 # 
 # # define model layers
-# model6 %>% 
+# model8 %>% 
 #    # layer_dense(units = ncol(train_bow_tfidf_x)/2,                   # number of neurons in 1st hidden layer
 #    #             activation = 'relu',              # use a rectified linear unit as an activation function in 1st hidden layer
 #    #             input_shape = c(ncol(train_bow_tfidf_x),nrow(train_bow_tfidf_x))
@@ -1073,14 +1077,14 @@ cat("Test classification success rate = ", mean(model1$predict_classes(test_bow_
 #   layer_activation('softmax')
 # 
 # # compile model
-# model6 %>% compile(
+# model8 %>% compile(
 #   optimizer = 'adam',
 #   loss = 'categorical_crossentropy',
 #   metrics = c('accuracy')
 # )
 # 
 # # fit model
-# model6 %>%
+# model8 %>%
 #   fit(x = train_bow_tfidf_x,   # for the x input we exclude columns 1=sentence.id, and 9771=predicter.presidents.name
 #       y = train_bow_tfidf_y,
 #       class_weight = list("0"=27.3, "1"=1.6, "2"=1.1, "3"=10, "4"=1, "5"=11.2),
@@ -1089,8 +1093,6 @@ cat("Test classification success rate = ", mean(model1$predict_classes(test_bow_
 #       validation_data = list(test_bow_tfidf_x, test_bow_tfidf_y)) %>%
 #   plot()
 ```
-
-  
 
 
 ## Feed-forward neural network
@@ -1180,6 +1182,14 @@ save_model_weights_hdf5(model1, "models/Waldo_SONA_model1_weights.h5") #save mod
 save(history1, file = "models/history1.RData")
 ```
 
+Load model
+
+```{r}
+model1 = load_model_hdf5("models/Waldo_SONA_model1.h5")
+load_model_weights_hdf5(model1, "models/Waldo_SONA_model1_weights.h5")
+load("models/history1.RData")
+```
+
 
 Compare train and test accuracy
 
@@ -1264,10 +1274,20 @@ This table shows that, for:
 * Zuma (ID = 4), where we had most predictions correct and we also had 30.9% of all words assosiated with him.
 * Mbeki (ID = 2), for whom we had the highest word percentage assosiation (39.1%) and where more than half of the predictions were correct.
 
+Save model
+
 ```{r}
 save_model_hdf5(model2, "models/Waldo_SONA_model2.h5") #save model to use later on
 save_model_weights_hdf5(model2, "models/Waldo_SONA_model2_weights.h5") #save model weights to use later on
 save(history2, file = "models/history2.RData")
+```
+
+Load model
+
+```{r}
+model2 = load_model_hdf5("models/Waldo_SONA_model2.h5")
+load_model_weights_hdf5(model2, "models/Waldo_SONA_model2_weights.h5")
+load(file = "models/history2.RData")
 ```
 
 Let's see if we can get an improvement, by correcting the class imbalance. We will use the weight adjustments which we have already calculated for grouping sentences per president.
@@ -1329,10 +1349,20 @@ This means that even though our overall performance have decreased, we at least 
 table(predicted = model3$predict_classes(x_test), actual = predicter_presidents_id[-train.index])
 ```
 
+Save model
+
 ```{r}
 save_model_hdf5(model3, "models/Waldo_SONA_model3.h5") #save model to use later on
 save_model_weights_hdf5(model3, "models/Waldo_SONA_model3_weights.h5") #save model weights to use later on
 save(history3, file = "models/history3.RData")
+```
+
+Load model
+
+```{r}
+model3 = load_model_hdf5("models/Waldo_SONA_model3.h5")
+load_model_weights_hdf5(model3, "models/Waldo_SONA_model3_weights.h5")
+load(file = "models/history3.RData")
 ```
 
 Sentence summary with stop words:
@@ -1568,10 +1598,20 @@ history4 = model4 %>%
 plot(history4)
 ```
 
+Save model
+
 ```{r}
 save_model_hdf5(model4, "models/Waldo_SONA_model4.h5") #save model to use later on
 save_model_weights_hdf5(model4, "models/Waldo_SONA_model4_weights.h5") #save model weights to use later on
 save(history4, file = "models/history4.RData")
+```
+
+Load model
+
+```{r}
+model4 = load_model_hdf5("models/Waldo_SONA_model4.h5")
+load_model_weights_hdf5(model4, "models/Waldo_SONA_model4_weights.h5")
+load(file = "models/history4.RData")
 ```
 
 ```{r}
@@ -1579,7 +1619,7 @@ cat("Train classification success rate = ", mean(model4$predict_classes(x_train_
 cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cnn) == test_cnn$y))
 ```
 
-Model 4 is a good improvement on the previous models. We now have an accuracy of 56.9% where the previous best was 49%
+Model 4 is a good improvement on the previous models. We now have an accuracy of 59.1% where the previous best was 49%
 
 We have ran 60 previous versions of this model to help determine what the best parameter setting should be. There were 20 tests, where each test was run 3 times and the best test accuracy was recorded. It is difficult to exactly repreduce the keras results from within R as Phyton will set its own random values with a different seed. The following table provide a summary of these tests. Note that parameter values are only displayed when a change to it was made. If no value is displayed in one of the parameter columns then the previous value was used for that specific test.
 
@@ -1709,10 +1749,10 @@ y_train_cnn = to_categorical(train_cnn$y)
 y_test_cnn = to_categorical(test_cnn$y)
 
 # initiate model
-model4 = keras_model_sequential()
+model4.3 = keras_model_sequential()
 
 # define model layers
-model4 %>% 
+model4.3 %>% 
   # embedding layer maps vocab indices into embedding_dims dimensions
   layer_embedding(max_features, embedding_dims, input_length = maxlen) %>%
   
@@ -1737,14 +1777,14 @@ model4 %>%
   layer_activation('softmax')
 
 # compile model
-model4 %>% compile(
+model4.3 %>% compile(
   optimizer = 'adam',
   loss = 'categorical_crossentropy',
   metrics = c('accuracy')
 )
 
 # fit model
-history4.3 = model4 %>%
+history4.3 = model4.3 %>%
   fit(x = x_train_cnn,
       y = y_train_cnn,
       epochs = 20,
@@ -1756,13 +1796,23 @@ history4.3 = model4 %>%
 plot(history4.3)
 ```
 
+Save model
+
 ```{r}
-cat("Train classification success rate = ", mean(model4$predict_classes(x_train_cnn) == train_cnn$y), "\n")
-cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cnn) == test_cnn$y))
+save_model_hdf5(model4.3, "models/Waldo_SONA_model4.3.h5") #save model to use later on
+save_model_weights_hdf5(model4.3, "models/Waldo_SONA_model4.3_weights.h5") #save model weights to use later on
+save(history4.1, file = "models/history4.1.RData")
+save(history4.2, file = "models/history4.2.RData")
+save(history4.3, file = "models/history4.3.RData")
 ```
 
 ```{r}
-table(predicted = model4$predict_classes(x_test_cnn), actual = test_cnn$y)
+cat("Train classification success rate = ", mean(model4.3$predict_classes(x_train_cnn) == train_cnn$y), "\n")
+cat("Test classification success rate = ", mean(model4.3$predict_classes(x_test_cnn) == test_cnn$y))
+```
+
+```{r}
+table(predicted = model4.3$predict_classes(x_test_cnn), actual = test_cnn$y)
 ```
 
 We can compare the approaches either on accuracy per president or average accuracy.
@@ -1859,10 +1909,20 @@ history5 = model5 %>%
 plot(history5)
 ```
 
+Save model
+
 ```{r}
 save_model_hdf5(model5, "models/Waldo_SONA_model5.h5") #save model to use later on
 save_model_weights_hdf5(model5, "models/Waldo_SONA_model5_weights.h5") #save model weights to use later on
 save(history5, file = "models/history5.RData")
+```
+
+Load model
+
+```{r}
+model5 = load_model_hdf5("models/Waldo_SONA_model5.h5")
+load_model_weights_hdf5(model5, "models/Waldo_SONA_model5_weights.h5")
+load("models/history5.RData")
 ```
 
 ```{r}
@@ -1870,7 +1930,7 @@ cat("Train classification success rate = ", mean(model5$predict_classes(x_train_
 cat("Test classification success rate = ", mean(model5$predict_classes(x_test_cnn) == test_cnn$y))
 ```
 
-This model only achieved an accuracy of 54.5% which is not better than our first CNN model which achieved 56.9%. It seems that a more general approach worked better than to add to many extra layers.
+This model only achieved an accuracy of 57.4% which is not better than our first CNN model which achieved 59.1%. It seems that a more general approach worked better than to add to many extra layers.
 
 
 ## RNN
@@ -1920,10 +1980,20 @@ history6 = model6 %>%
 plot(history6)
 ```
 
+Save model
+
 ```{r}
 save_model_hdf5(model6, "models/Waldo_SONA_model6.h5") #save model to use later on
 save_model_weights_hdf5(model6, "models/Waldo_SONA_model6_weights.h5") #save model weights to use later on
 save(history6, file = "models/history6.RData")
+```
+
+Load model
+
+```{r}
+model6 = load_model_hdf5("models/Waldo_SONA_model6.h5")
+load_model_weights_hdf5(model6, "models/Waldo_SONA_model6_weights.h5")
+load("models/history6.RData")
 ```
 
 ```{r}
@@ -1931,19 +2001,20 @@ cat("Train classification success rate = ", mean(model6$predict_classes(x_train_
 cat("Test classification success rate = ", mean(model6$predict_classes(x_test_cnn) == test_cnn$y))
 ```
 
-The RNN is fairly simple model and have a reasonable accuracy when compared to our previous models.
+The RNN is fairly simple model and have a better accuracy when compared to our previous models (59.2% compared to 59.1%).
 
 
 ## Make some predictions
 
-Let's look at some predictions
+Let's look at some test predictions by selecting 5 random sentences from our validation data set.
 
 ```{r}
-# select 5 random test sentence
-test_index = sample((1:length(sequences))[-train.index.main], size = 5, replace = F)
+# select 5 random test sentences
+test_index = (1:length(sequences))[-train.index.main] # retrieve the validation indexes as positions in the sequences data set
+test_samples = sample(test_index, , size = 5, replace = F) # select 5 random test sentences
 
 j = 0
-for (i in test_index)
+for (i in test_samples)
 {
   j = j +1
   cat("TEST", j, "\n")
@@ -1951,7 +2022,7 @@ for (i in test_index)
   cat("Original sentence:\n", sona_sentences[i,]$sentence, sep = "", "\n\n")
   cat("Core sentence:\n", sona_sentences[i,]$core_sentence, sep = "", "\n\n")
   cat("Actual president:", sona_sentences[i,]$president, "\n")
-  cat("Predicted president:", sona_sentences[i,]$president, "\n\n")
+  cat("Predicted president:", c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(model6$predict_classes(matrix(x_test_cnn[which(test_index == i),], nrow = 1, ncol = 50)), (0:5))], "\n\n")
 }
 ```
 
