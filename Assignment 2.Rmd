@@ -513,6 +513,44 @@ From the above we can see that de Klerk's speech was quite negative, this was a 
 
 Motlanthe took over for a short while until Zuma could be president in 2009. Zuma was very positive in 2010 and 2011, but thereafter (with the exception of 2015) he did not reach such positive sentiment ratios again. An interesting trend we see is that each president, when it is their last SONA, ended with a SONA that has a sentiment ratio below (more negative than) the smooth average curve drawn above. Zuma also ended his SONA with a negative ratio and Ramaphosa was very positive again when he became president in 2018. 
 
+
+## NRC lexicon
+
+* $Parliament$ is associated with trust
+* $Republic$ is marked as negative
+* $Government$ is marked as negative
+
+The above is a couple of examples that shows that the NRC lexicon will not make sense for a SONA where these words will be used regularly.
+
+
+## AFINN lexicon
+
+AFINN scores each word with a negative to positive score (-5 up to +5). If we compare the word sentiment (no negation) using AFINN with the word sentiment (no negation) with BING lexicon, the only difference we see is obviously the scores that is more extreme with AFINN (as expected, with BING we weighted all words from -1 to +1) leading to a graph that is steeper overall on average. The trends are the same, with the only notable difference that Motlanthe is rated by AFINN as slightly more positive than the average smoothed line, wheras the BING lexicon rated Motlanthe as slightly more negative than this smoothed line.
+
+```{r, message=FALSE}
+#get_sentiments("afinn") %>% head(10)
+
+#number of words of each sentiment level
+new_one =
+sona_words %>%
+  ungroup() %>%
+  inner_join(get_sentiments("afinn")) %>% # add sentiments (pos or neg)
+  select(president,year, count, score) %>%
+  mutate(total_score = count*score) %>%
+  group_by(president, year) %>%
+  summarise(sentiment = sum(total_score),
+            sentiment_norm = sum(total_score) / nrow(sona_words) * 100)
+
+# plot of sentiment over time & automatically choose a method to model the change
+ggplot(new_one, aes(x = as.numeric(year), y = sentiment_norm)) +
+  geom_point(aes(color = president))+ # add points to our plot, color-coded by president
+  geom_smooth(method = "auto") + # pick a method & fit a model
+  labs(title="AFINN normalised sentiment ratio over time per president", x="Year", y="Ratio of sum(score)/total words") +
+  scale_x_continuous(breaks = c( seq(1994, 2018, 2)))
+
+```
+
+
 ## Bigram Sentiment with Negation
 
 It is interestin to note that, when employng Negation, the initial negative sentiment of De Klerk, based on words without negation, has changed to be positive. Additionally, the elevated positive sentiment between 2002 to 2007, has been reduced. Unlike the non-negated word sentiment analysis, negation also highlights a steeper negative trend from 2016 onwards. The  trend that each president, when it is their last SONA, ended with a SONA that has a sentiment ratio below (more negative than) the smooth average curve drawn above, is however maintained.
