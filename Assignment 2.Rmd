@@ -171,7 +171,7 @@ sona_matrix = sona_words %>%
 sona_matrix[1:10,1:20]
 ```
 
-Clean matrix by moving the sentence.id into the row name, and adding the presidents name as a predictor variable.
+Clean tibble by moving the sentence.id into the row name, and adding the presidents name as a predictor variable.
 
 ```{r}
 # create predicter vector of president names
@@ -191,24 +191,13 @@ sona_matrix = as.matrix(sona_matrix)
 rownames(sona_matrix) = sona_rownames
 colnames(sona_matrix) = sona_colnames
 
-sona_matrix[1:10,1:20]
+#sona_matrix[1:10,1:20]
 ```
 
-Confirm the size of our matrix:
+Confirm the size of our data:
 
 ```{r}
 dim(sona_matrix)
-```
-
-Confirm the number of presidents, and list them in the order of total words we have for them.
-
-```{r}
-sona_words %>%
-  group_by(president) %>%
-  summarise(word.count = sum(count)) %>%
-  mutate(word.percentage = round(word.count / sum(sona_words$count) * 100, 2)) %>%
-  select(president, word.count, word.percentage) %>%
-  arrange(word.count)
 ```
 
 We can also list the presidents by the number of sentences we have for them and calculate an adjustment weight which can be applied if we would like to create an equal balance of sentences among them.
@@ -297,14 +286,20 @@ top_terms %>%
   coord_flip()
 ```
 
-If we consider the most used words, we can roughly interpret our topics as below:  
- - Topic 1 has $Governance$, $Programme$, $Nation$, $Develop$ and $Sector$ as important words. The unique words here (compared to top 5 words in other topics are $sector$ and $programme$.) Hence our conclusion is that this topic concerns governing by developing sectors and programmes. 
- -Topic 2 has $South$, $people$, $African$, $Nation# and $Countries$ as the top 5 words. The combination of these words tell us that this topic has to do with the identity of the country. The only unique word here in the top 5 compared to other topics, is $African$.  
- -Topic 3 has words in the top 5 of $Country$, $Govern$, $Develop$, $Improve$ and $People$. Unique words we see here is $Improve$ hence we conclude that this topic refers to country improvement and development.  
- -Topic 4 has words of $Govern$, $People$, $Country$, $Ensure$ and $Include$ in its top 5 words. The unique words here are $include$ and $ensure$ which tells us that this topic is about inclusion in the country and ensuring that things are done.  
- -Topic 5 has the words $Govern$, $Nation$, $People$, $South$ and $Constitution$ coming out in the top 5. Unique words here refer to $Constitution$ hence we can conclude that this topic refers to the country's constitution.  
- -Topic 6 have top 5 words as $Govern$, $South$, $Nation$, $Develop$ and $Continuous$ and we notice the unique words here are $Continuous$ so we can see this topic as one that states that things must continue to develop for the nation. 
+If we consider the most used words, we can roughly interpret our topics as below: 
+
+* Topic 1 has $south$, $govern$, $people$, $country$ and $improvement$ stem words listed. The unique words when comparing to other topics are $improvement$, so we can summarise this topic as improving South Africa.  
   
+* Topic 2 has $govern$, $nation$, $people$, $country$ and $public$ stem words listed in the top 5. Unique words here are $public$ hence we can conclude that this topic is about governing the nation, with a specific emphasis on public relations.
+
+* Topic 3 has $govern$, $south$, $service$, $continous$ and $african$ stem words with unique words as $service$ and $continous$. Hence we can summarise this topic as continous service for south africa.  
+  
+* Topic 4 has $south$, $constitution$, $people$, $african$ and $nation$ as stem words in the top 5. The focus here is strongly on the constitution (unique word compared to others) as topic.  
+  
+* Topic 5 has $people$, $govern$, $country$, $programme$ and $nation$ in its top 5 stem words. This topic is about programmes for the country.  
+  
+* Topic 6 listed $govern$, $south$, $nation$, $develop$ and $country$ in its top 5 stem words. A unique words seen here is $develop$, hence this topic is about development of South Africa. 
+
 We also focus on the log ratio differences between words to see if we can better establish the differences between topics. We need to filter out common words (words with beta >= 0.001) in at least one topic. Using $log_2(\beta_2/\beta_1)$ we can model the differences between 2 topics. I.e. if $\beta_2$ is twice as large as $\beta_2$, the log ratio will be 1, whereas if $\beta_1$ is twice as large as $\beta_2$, the log ratio will give a value of -1. Filtering on greater log difference values (e.g. $>=0.0001$) in one topic gives an indication of the contrast.  
 
 ```{r, warning=FALSE}
@@ -367,11 +362,16 @@ beta_spread %>%
 ```
 
 Interpreting the log ratio differences, we see the below when we compare each topic to topic 1 (to shed more light on the meaning and inclusion/exclusion of the topics):  
-Topic 1 (Development and programmes) differs from topic 2 (African/country identity) the most by words like $even$ from topic 2 and $discharge$ seen mostly in topic 1. Topic 1 also include words like $truth$ and $instances$ which makes sense considering it is about development and programmes as opposed to identity. 
-Topic 3 (Country improvement and development) differs from topic 1 with words such as $Diligent$ and $Even$ used in topic 3 and topic 1 has more words regarding $Centenary$ and $own$ used that we do not see in topic 3.
-Topic 4 (Inclusion and ensuring) also inclused words like $diligent$ and $even$ more than topic 1. This is expected as topic 4 focuses on inclusion, hence $even$ and fairness will be important in this topic, much more than in a topic regarding development and programmes.
-Topic 5 (Constitution) differs also by using words like $even$ and $diligent$ but it contains far fewer occurences of topic 1 words like $compatriot$, $limpopo$ and $graduation$.
-Topic 6 (Continuous) contains words like $even$ and $diligence$, but fewer $discharge$ and $government$ words than topic 1. 
+
+* Topic 1 (Improvement) differs from topic 2 (Public) the most by stem words like $offens$, $discharge$, $success$, $ministries$ and $farmer$ seen in topic 2 and $stronger$, $april$ seen mostly in topic 1. Note the word "van" is an Afrikaans stop word, hence significant only because Afrikaans was used in topic 1. 
+  
+* Topic 3 (Continous service for SA) differs from topic 1 again by not frequently using words like $farmer$, $offens$, $discharge$ and $success$ as seen earlier. Also we see stem words such as $underdevelop$ used in topic 3 more frequently and topic 1 has $even$ used, that we do not see as frequently in topic 3. This makes sense considering topic 3 wants continous service for SA, hence will discuss underdevelopment whereas topic 1 focuses more on improvement and $even$ words. 
+
+* Topic 4 (Constitution) also inclused words like $farmer$ as seen above that topic 1 did not use frequently. But we see words like $even$, $compatriot$, $limpopo$, $pleas$ used more in this topic than topic 1. This meanse the word $even$ is seen in this case much more in topic 4 than 1, whereas we saw the word $even$ more in topic 1 than 3. Our conclusion here is that the constitution-topic focuses more strongly on $even$.   
+
+* Topic 5 (Programmes) differs also by using stem words like $discharg$, $underdevelop$, $offens$, $limpopo$ and $compatriot$ but it contains far fewer occurences of topic 1 words like $virtual$ and $even$.
+
+* Topic 6 (Development) contains stem words like $even$, $compatriot$, $limpopo$, $underdevelop$, $farmer$ but fewer $virtual$ and $instance$ and $chamber$ words than topic 1. 
     
 ## Document topic probabilities  
 Gamma is the mixture of topics per president, so the below table shows which topic is used by which president. 
@@ -389,16 +389,17 @@ sona_gamma %>%
 
 ```
   
-From above, we interpret the topics per president as below (note the topic modelling distinguished quite well between presidents) :
-De Klerk's speech consists mainly of topic 5 (Constitution.) This makes sense considering this is the last speech before apartheid ended and many things changed constitutionally thereafter (as well as enabling all people to vote.) 
+From above, we interpret the topics per president as below (note the topic modelling distinguished quite well between presidents) :  
 
-Mandela's speech used both topic 3 (less) and topic 5 (higher percentage) with his speeches. Topic 3 covers the country improvement and development and topic 5 the constitution. It is interesting to note that both de Klerk and Mandela had topic 5 covered, as this was a time for transition for the country and the constitution would have been an important topic to cover considering the changes made in 1994. 
+De Klerk's speech consists mainly of topic 4 (Constitution.) This makes sense considering this is the last speech before apartheid ended and many things changed constitutionally thereafter (as well as enabling all people to vote.) 
 
-Topic 1 (Development and programmes) makes up a portion of Mbeki's speech. We also see Topic 4 (Inclusion and ensuring) making up the larger part of Mbeki's speech. Mbeki's speech can hence be identified by these 2 main topics, we do not see other presidents making use of these topics significantly.
+Mandela's speech used both topic 3 (less) and topic 2 (higher percentage) with his speeches. Topic 3 covers continous service and topic 2 the public relations. This was a time for transition for the country and uniting the nation (strong public relations) would have been an important topic to cover considering the changes made in 1994. It is interesting to note that both Mandela and his successor, Mbeki, had SONAs which contained topic 3 (continous service) as this was an important topic for a young democracy.    
+  
+Topic 5 (Programmes) makes up a larger portion of Mbeki's speech. Still continuing service, but now after uniting the nation with good public relations (Mandela's topics) the focus shifts with Mbeki to programmes to develop the country. This was a time of economic growth for South Africa, so his focus on programmes makes sense for more development. 
 
-Motlanthe took over from Mbeki and we see his speech mainly consisted of topic 3 (country improvement and development.) It is interesting to note that both he and Mandela used topic 3 and both times these presidents would have viewed the previous presidency as something that had to be 'corrected.' (De Klerk, Mandela's predecessor, was from another party,  and Mbeki was ousted early as president as well.) We see a small percentage of Motlanthe's speech covering topic 2 (African country/identity) as well. This is interesting to note as his successor, Zuma, also had a portion of this topic regarding African country/identity in his speech. 
-
-Zuma's speeches mainly covered topic 6 (continuous) but we see his successor, Ramaphose, only covered topic 2 (African country/identity.) So the past 3 presidents (Motlanthe, Zuma and Ramaphosa) all had an element of the African country/identity in their speeches, but Motlanthe focused on this far more than his predecessors. 
+Motlanthe took over from Mbeki and we see his speech mainly consisted of topic 1 (improving SA.) This topic is unique to Motlanthe and considering he was only president until they could appoint Zuma, his main focus was on improvement.
+  
+Zuma's speeches mainly covered topic 6 (Development) but also contained elements similar to de Klerk's SONA topic 4 (Constitution). Once again it is interesting to note that he 'handed over' to Ramaphosa and we can see a small percentage of Zuma's topics as topic 4 (constituion) but this topic largely identifies Ramaphosa's SONA. 
   
 ## Wordclouds for our presidents  
 We can use our stem-words to show the most used words per president. For the example below, we show the most used (stem) words of Mandela in a word cloud of 25 words as shown below. As expected, the words $govern$, $nation$ and $people$ stand out.  
@@ -448,7 +449,7 @@ sona_words_sent %>%
   labs(title="Most occuring positive words per president used", x="Word", y="Count")
 ```
   
-We can do the same for the negative words, which president used the mostly used negative words and how many times during his reigh as president?  
+We can do the same for the negative words, which president used the mostly used negative words and how many times during his reign as president?  
   
 ```{r}
 sona_words_sent %>%
@@ -509,7 +510,7 @@ ggplot(sona_sent_plot, aes(x = as.numeric(year), y = sentiment_norm)) +
   
 ```
   
-From the above we can see that de Klerk's speech was quite negative, this was a very uncertain time for the country and it comes across in his speech's negativity. Mandela focused a lot on building community (improvement topic) and uniting the nation, which inherently is more positive words. Generally speaking, the trend continued to increase positively when Mbeki took over from Mandela in 2000. We can see the ratio flattening around 2005 and the sentiment ratio of Mbeki was almost as low in 2008 as when he started his presidency in 2000. The year of 2008 is also the year that the world-wide recession hit and the outlook was indeed bleak that year. 
+From the above we can see that de Klerk's speech was quite negative, this was a very uncertain time for the country and it comes across in his speech's negativity. Mandela focused a lot on building community (public relations and contious services topics) which inherently is more positive words. Generally speaking, the trend continued to increase positively when Mbeki took over from Mandela in 2000. We can see the ratio flattening around 2005 and the sentiment ratio of Mbeki was almost as low in 2008 as when he started his presidency in 2000. The year of 2008 is also the year that the world-wide recession hit and the outlook was indeed bleak that year. 
 
 Motlanthe took over for a short while until Zuma could be president in 2009. Zuma was very positive in 2010 and 2011, but thereafter (with the exception of 2015) he did not reach such positive sentiment ratios again. An interesting trend we see is that each president, when it is their last SONA, ended with a SONA that has a sentiment ratio below (more negative than) the smooth average curve drawn above. Zuma also ended his SONA with a negative ratio and Ramaphosa was very positive again when he became president in 2018. 
 
@@ -552,9 +553,8 @@ ggplot(new_one, aes(x = as.numeric(year), y = sentiment_norm)) +
 
 
 ## Bigram Sentiment with Negation
-
-It is interestin to note that, when employng Negation, the initial negative sentiment of De Klerk, based on words without negation, has changed to be positive. Additionally, the elevated positive sentiment between 2002 to 2007, has been reduced. Unlike the non-negated word sentiment analysis, negation also highlights a steeper negative trend from 2016 onwards. The  trend that each president, when it is their last SONA, ended with a SONA that has a sentiment ratio below (more negative than) the smooth average curve drawn above, is however maintained.
-
+  
+One-step bigrams are created and if a negation word is used, the initial sentiment is reversed.    
 
 ```{r, message=FALSE}
 
@@ -644,18 +644,19 @@ ggplot(bigrams_separated_ratio, aes(x = as.numeric(year), y = sentiment_norm)) +
 
 ```
 
+It is interesting to note that, when employng Negation, the initial negative sentiment of De Klerk, based on words without negation, has changed to be positive. Additionally, the elevated positive sentiment between 2002 to 2007, has been reduced. Unlike the non-negated word sentiment analysis, negation also highlights a steeper negative trend from 2016 onwards. The  trend that each president, when it is their last SONA, ended with a SONA that has a sentiment ratio below (more negative than) the smooth average curve drawn above, is however maintained.
 
 ## Term Frequency - Inverse Document Frequency (TF-IDF)
 TF-IDF is a method of assigning weight to more important words in documents. It comprises of 2 separate indicators, which combines to produce the final weight.
 
 1. Term frequency (TF) : This is a calculation of how frequent a term is found in a document, and is given by the number of occurrences of the term in a document, divided by the number of terms in that document. \n
 
-$ TF_{ij} = \frac{Occurrences_{ij}}{Terms_j}} $ for all terms i in document j. \n
+$TF_{ij} = \frac{Occurrences_{ij}}{Terms_j}}$ for all terms i in document j. \n
 
 2. Inverse document Frequency : This is the natural log (Ln) of the total number of documents, divided by the number of documents in which the term appears. \n
-$ IDF_i = Ln({\frac{Documents_{Tot}}{DocumentsWithTerm_i})} $ for all terms i
+$IDF_i = Ln({\frac{Documents_{Tot}}{DocumentsWithTerm_i})}$ for all terms i
 
-The simple multiplication of these 2 values produce the tf-idf for each term in each document. Applying the *bind_tf_idf* function in r to the SONA word tibble, adds the TF, IDF and TF-IDF features to the tibble. The 6 figures below show the top 10 most important words of each president.
+The simple multiplication of these 2 values produce the tf-idf for each term in each document. Applying the *bind_tf_idf* function in R to the SONA word tibble, adds the TF, IDF and TF-IDF features to the tibble. The 6 figures below show the top 10 most important words of each president.
 
 It would seem that over the years, the perceived political weight of the words decreased over time. As such, presidents De Klerk and Mandela used words with big political implication such as "autonomy", "volkstaat", "constitution", "democracy" and "truth, while the later presidents had less of such "heavy-weight" terms in their top 10 most important words.
 
@@ -698,9 +699,9 @@ sona_bow_tfidf %>%
 
 
 ## Bag of Words
-Bag-of-Words is structured representation of the words used in sets of documents (*corpus*). In the "Bag", the order, punctuation and subtle implication ("between the lines" meaning) of each word is disregarded, and merely the occurrence count per document is maintained in the representation. Such Bag-of-words information sets and often used as input to descriptive and predictive modelling. 
+Bag-of-Words is structured representation of the words used in sets of documents (*corpus*). In the "Bag" the order, punctuation and subtle implication ("between the lines" meaning) of each word is disregarded, and merely the occurrence count per document is maintained in the representation. Such Bag-of-words information sets are often used as input to descriptive and predictive modelling. 
 
-To illustrate this, a simple tree model is fitted on the SONA data, using the president's name as the "document" identifier. Which yielded a training accuracy of 43% and at test accuracy of 42%. (Better models can be build using the bag-of-words dataset, as is shown later in this document.)
+To illustrate this, a simple tree model is fitted on the SONA data, using the president's name as the "document" identifier. This yielded a training accuracy of 43% and at test accuracy of 42%. (Better models can be built using the bag-of-words dataset, as is shown later in this document.) 
 
 
 ```{r}
@@ -737,18 +738,27 @@ options(repr.plot.width=8, repr.plot.height=10)
 plot(bow_fit, main="Full Classification Tree")
 text(bow_fit, use.n=TRUE, all=TRUE, cex=.7)
 
+```
+  
+Below output shows the training set classification and accuracy.  
+  
+```{r}
 fittedtrain <- predict(bow_fit,type="class")
 predtrain <- table(train_bow$president_sona,fittedtrain)
 predtrain
 sum(diag(predtrain))/sum(predtrain) # training accuracy
-
+```
+  
+It is very similar to the test set classification accuracy:  
+  
+```{r}
 fittedtest <- predict(bow_fit,newdata=test_bow,type="class")
 predtest <- table(test_bow$president_sona,fittedtest)
 predtest
 sum(diag(predtest))/sum(predtest) # test accuracy
 ```
 
-Save objects
+The object can be saved.  
 ```{r}
 save(sona_bow, train_ids, train_bow, test_bow, bow_fit, fittedtrain, predtrain, fittedtest, predtest, file = "models/BOW.RData")
 ```
@@ -757,8 +767,7 @@ save(sona_bow, train_ids, train_bow, test_bow, bow_fit, fittedtrain, predtrain, 
 ## Bag of Words with TF-IDF
 An alternative implementation for Bag-of-Words is to replace the word occurrence count per document with the term frequency - inverse document frequency (tf-idf) of each word. This could enhance the value of the bag-of-words by giving weight to more important words used in the documents. 
 
-Again, to illustrate the use, a simple tree model is fitted on the SONA data, using tf-idf in this case, and the president's name as the "document" identifier. In this case marginally better training accuracy of 44% and at test accuracy of only 10% were achieved.
-(Note that the number of words were limited to the top 2000 based on TF-IDF.)
+Again, to illustrate the use, a simple tree model is fitted on the SONA data, using tf-idf in this case, and the president's name as the "document" identifier. In this case marginally better training accuracy of 44% and a worse test accuracy of only 10% were achieved. (Note that the number of words were limited to the top 2000 based on TF-IDF.)
 
 
 ```{r}
@@ -804,25 +813,36 @@ options(repr.plot.width=8, repr.plot.height=10)
 plot(fit_tfidf, main="Full Classification Tree with TF-IDF")
 text(fit_tfidf, use.n=TRUE, all=TRUE, cex=.7)
 
+```
+
+
+The training set has accuracy as shown below:  
+  
+```{r}
 fittedtrain_tfidf <- predict(fit_tfidf,type="class")
 predtrain_tfidf <- table(train_bow_tfidf$president_sona,fittedtrain_tfidf)
 predtrain_tfidf
 sum(diag(predtrain_tfidf))/sum(predtrain_tfidf) # training accuracy
+```
 
+The test set has accuracy as below:
+```{r}
 fittedtest_tfidf <- predict(fit_tfidf,newdata=test_bow_tfidf,type="class")
 predtest_tfidf <- table(test_bow_tfidf$president_sona,fittedtest_tfidf)
 predtest_tfidf
 sum(diag(predtest_tfidf))/sum(predtest_tfidf) # test accuracy
-
 ```
 
-Save objects
+The objects are saved as well.  
+
 ```{r}
 save(sona_words_tfidf, sona_bow_tfidf, train_ids_tfidf, train_bow_tfidf, test_bow_tfidf, fit_tfidf, fittedtrain_tfidf, predtrain_tfidf, fittedtest_tfidf, predtest_tfidf, file = "models/TFIDF.RData")
 ```
 
-
-## Feed-forward neural network - with tfidf
+## Feed-forward neural network - with tfidf  
+  
+A feed-forward neural network, using tfidf, can be used to predict which president used a particular sentence in his SONA. The data is split up into a test and train set (70% to 30%).  
+  
 
 ```{r}
 library(keras)
@@ -908,13 +928,12 @@ model7 %>% compile(
 history7 = model7 %>%
   fit(x = train_bow_tfidf_x,
       y = train_bow_tfidf_yc,
-      epochs = 1,
+      epochs = 1, 
       batch_size = 32,
       validation_data = list(test_bow_tfidf_x, test_bow_tfidf_yc))
 
 plot(history7)
 ```
-
 
 Save model
 
@@ -1238,7 +1257,10 @@ cat("Test classification success rate = ", mean(model1$predict_classes(x_test) =
 
 
 From the above result we can see that the model is overfitting as the train accuracy is more than double that of the test accuracy.
-The test accuracy is also worse than what a random guess would have been (e.g. 50%).
+A random guess would be 
+* 16.67% if random 1 out of 6 presidents are guessed, or 
+* if we repeatedly guess Zuma based on most sentences (sentence distribution) a chance of 36.3% to be correct.
+We see that our test accuracy is significantly better than a random guess.   
 For this first model we have only used 640 neurons in a single hidden layer, let's expand the architecture to see if we can improve on this model.
 
 Our next model will use the following architecture:
@@ -1443,14 +1465,14 @@ sona_sentance_summary_without_stop_words %>%
 
 ## CNN with embeddings
 
-Another approach we can onsider is using a Convolutional Neural Network (CNN) which is good when dealing with data in which the input features exhibit some kind of spatial or temporal ordering. CNNs are designed to exploit the structure of ordered data. Their fundamental building block is the convolution filter, which is a small matrix (normally 3x3), which is applied to the data to help extract hidden features.
+Another approach we can consider is using a Convolutional Neural Network (CNN) which is good when dealing with data in which the input features exhibit some kind of spatial or temporal ordering. CNNs are designed to exploit the structure of ordered data. Their fundamental building block is the convolution filter, which is a small matrix (normally 3x3), which is applied to the data to help extract hidden features.
 We can add embeddings to the CNN, which is simmalar to the latent variables concept we used for building a recommender system.
 
 For this model we will not use the previous sona_matrix object. Instead we will use Keras to tokenize the sentences into sequences will be used as input for the embeddings to the CNN.
 
 We first need to look at a few things to determine the best parameters for the CNN embeddings.
 
-We will start with checking sentence lengths. In other words what is the average number of words per sentence and what is the maximum lenght of sentences we should consider to reprecent 98% of the data?
+We will start with checking sentence lengths. In other words what is the average number of words per sentence and what is the maximum length of sentences we should consider to represent 98% of the data?
 Note that for these sentences all stop words and punctuation have been removed. We are using the sona_words object and joining it to sona_sentences to achieve this.
 
 ```{r}
@@ -1462,12 +1484,13 @@ sentence_word_counts = sona_sentences %>%
   arrange(count)
 
 #plot(x = 1:nrow(sentence_word_counts), y = sentence_word_counts$count)
-hist(sentence_word_counts$count, col = "lightgrey", main = "Histogram of sentence word counts", xlab = "Total words in sentence")
+hist(sentence_word_counts$count, col = "lightgrey", main = "Histogram of sentence word counts", xlab = "Total words in sentence", xlim = c(0,130))
+
 ```
 
 ```{r}
 cat("average number of words per sentence is", mean(sentence_word_counts$count), "\n")
-cat("maximum lenght of sentences which reprecent 98% of data is", quantile(sentence_word_counts$count, 0.98), "\n\n")
+cat("maximum length of sentences which represent 98% of data is", quantile(sentence_word_counts$count, 0.98), "\n\n")
 
 cat("# sentence with  3 or less words is", sum(sentence_word_counts$count <= 3), "\n")
 cat("# sentence with  4 or less words is", sum(sentence_word_counts$count <= 4), "\n")
@@ -1484,7 +1507,7 @@ cat("# sentence with more than 150 words is", sum(sentence_word_counts$count > 1
 ```
 
 
-Check frequency of words accross all sentences to help determine the maximum features to use. In other words, how many unique words should we keep to sill reprecent 95% of the data?
+Check frequency of words accross all sentences to help determine the maximum features to use. In other words, how many unique words should we keep to still represent 95% of the data?
 
 ```{r}
 word_counts = sona_words %>%
@@ -1494,7 +1517,7 @@ word_counts = sona_words %>%
   arrange(count)
 
 #plot(x = 1:nrow(word_counts), y = word_counts$count)
-hist(word_counts$count, col = "lightgrey", main = "Histogram of word count occurences", xlab = "Word count")
+hist(word_counts$count, col = "lightgrey", main = "Histogram of word count occurences", xlab = "Word count", xlim=c(0,300))
 ```
 
 ```{r}
@@ -1659,14 +1682,14 @@ cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cn
 
 Model 4 is a good improvement on the previous models. We now have an accuracy of 59.1% where the previous best was 49%
 
-We have ran 60 previous versions of this model to help determine what the best parameter setting should be. There were 20 tests, where each test was run 3 times and the best test accuracy was recorded. It is difficult to exactly repreduce the keras results from within R as Phyton will set its own random values with a different seed. The following table provide a summary of these tests. Note that parameter values are only displayed when a change to it was made. If no value is displayed in one of the parameter columns then the previous value was used for that specific test.
+We have run 60 previous versions of this model to help determine what the best parameter setting should be. There were 20 tests, where each test was run 3 times and the best test accuracy was recorded. It is difficult to exactly repreduce the keras results from within R as Phyton will set its own random values with a different seed. The following table provide a summary of these tests. Note that parameter values are only displayed when a change to it was made. If no value is displayed in one of the parameter columns then the previous value was used for that specific test.
 
 ```{r}
 cnn_parameter_tests = read.csv("cnn_parameter_tests.csv")
 data.frame(cnn_parameter_tests)
 ```
 
-We can again try and see if we can improve on this model by correcting the class imbalances. The previous class weights calculated on the sona_sentences object which was use for the sona_matrix cannot be used in this case as we have how exluced short sentences. The following table display the new weights which we should consider for our CNN model:
+We can again try and see if we can improve on this model by correcting the class imbalances. The previous class weights calculated on the sona_sentences object which was use for the sona_matrix cannot be used in this case as we have how excluded short sentences. The following table display the new weights which we should consider for our CNN model:
 
 ```{r}
 cnn_class_balance = read.csv("cnn_class_balance.csv")
@@ -1860,7 +1883,7 @@ When using average accuracy, then approach 2 is better.
 
 ## Expanding on CNN with embeddings
 
-We can try and make our CNN model better by adding more convolutional layers. For the next model we will use the same basis as for model4 by keeping the same max_features, minlen, maxlen and embedding_dims.
+We can try and make our CNN model better by adding more convolutional layers. For the next model we will use the same basis as for model 4 by keeping the same max_features, minlen, maxlen and embedding_dims.
 
 ```{r}
 # build train and test set
@@ -2064,11 +2087,22 @@ for (i in test_samples)
 }
 ```
 
-
 ## Conclusion
 
+The aim for this dataset was to extract interesting features in the text. This was obtained by tokenising on words, using bag of words, TF-IDF frequencies and text wrangling like removing stop words and looking at stem words. As expected, many of the words used in SONAs are repeated, but despite this, the topics found for each president (or combination thereof) did differ slightly and we could even see 'handover' from one president to another in some cases (e.g. Mandela and Mbeki used topic 3.) Sentiment analysis also showed us, interestingly, that the last speech of each president was below the average sentiment score. Using negation also increased the accuracy of the sentiment analysis score, where we could see that for example de Klerk's speech scored higher (more positive) when using negation than without it. 
+ 
+To predict which president said a sentence, the training data was split into a train and test set. Taking a random guess for our dataset of six presidents, given a sentence, one has a chance of 16.67% (1 out of 6) to correctly guess the president who used the sentence in his SONA. A smarter guess would be to look at the distribution of sentences, then guessing always Zuma, would give an accuracy of 36.3%. So the aim with our neural networks was to beat these chances. This was achieved... 
 
+##Group contributions  
+The group had 3 members, collaborating on a shared repository on github (see https://github.com/WaldoLeonhardt/DS-for-Industry for details.) Waldo's file was used as a base, then Marike and Francois added contributions with pull and push requests. 
 
+|Name               | Contribution                                                           |  
+|-------------------|------------------------------------------------------------------------|
+|All                | Data wrangling, basic Feed-forward neural net, review of report        |
+|Marike du Plessis  | Sentiment analysis, Topic analysis and Worcloud                        |
+|Waldo Leonhardt    | Bag of words, Bigrams with negation, TF-IDF for feed-forward neural net|
+|Francois Evert     | Feed-forward neural net, CNN and RNN with hyperparameter tuning        |
+Table showing group contributions
 
 
 
