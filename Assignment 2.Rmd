@@ -1,7 +1,7 @@
 ---
 title: "STA5076Z Assignment 2: SONA Predict the President"
 author: "Marike du Plessis (DPLMAR037), Waldo Leonhardt (LNHWAL001) and Francois Evert (EVRFRA002)"
-date: "13 September 2018"
+date: "20 September 2018"
 output: html_notebook
 ---
 
@@ -24,7 +24,7 @@ This is the second assignment for Data Science for Industry where the goal is to
 Start by extracting data out of the SONA files.
 Build a data frame containing the filename, the speech text, president and year of speech.
 
-```{r}
+```{r, echo=TRUE}
 set.seed(123)
 library(tidyverse)
 
@@ -777,7 +777,7 @@ Again, to illustrate the use, a simple tree model is fitted on the SONA data, us
 Showing the **tf**, **idf** and **tf_idf** information added to the Sona words tibble below.
 
 
-```{r, message=FALSE}
+```{r}
 library(rpart)
 set.seed(123)
 
@@ -873,7 +873,7 @@ The following architecture has been selected for the model:
 * The accuracy metric will be used to access the performance of our model. We will assess the accuracy of our model by using a train and test dataset. Train data will be 80% of the sentences. Test data will be the remaining 20%.
 * The maximum number of epochs will be 20, but we enable early stopping in case the validation loss starts to increase to avoid overfitting.
 
-```{r, warning=FALSE, message=FALSE}
+```{r}
 library(keras)
 set.seed(123)
 use_session_with_seed(seed = 123, disable_gpu = F, disable_parallel_cpu = F, quiet = T) # set seed in Keras and TensorFlow
@@ -984,7 +984,7 @@ Our next model will use the following architecture:
 * Our loss function will be categorical cross entropy as we have a multi-class problem to solve.
 * The accuracy metric will be used to access the performance of our model.
 
-```{r, warning=FALSE, message=FALSE}
+```{r}
 # initiate model
 model2 = keras_model_sequential()
 
@@ -1033,15 +1033,21 @@ We can see our test accuracy improved slightly from 48.2% to 49%, but the model 
 We can also look at the confusion matrix:
 
 ```{r}
-table(predicted = model2$predict_classes(x_test), actual = predicter_presidents_id[-train.index])
+pres_predicted2 = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(model2$predict_classes(x_test), (0:5))]
+pres_actual = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(predicter_presidents_id[-train.index], (0:5))]
+
+kable(table(predicted = pres_predicted2, actual = pres_actual),
+      caption = "Training confusion matrix for Feed-forward neural network",
+      row.names = TRUE, digits = 0)
+
 ```
 
 This table shows that, for:
 
-* deKlerk (ID = 0), only 1 predictions were correct. This can be expected as we had the least number of words for deKlerk (only 1% of all words were assosiated with him).
-* Ramaphosa (ID = 5), only 4 predictions were correct. This is also expected as only 2.9% of all words were assosiated with him.
-* Zuma (ID = 4), where we had most predictions correct and we also had 30.9% of all words assosiated with him.
-* Mbeki (ID = 2), for whom we had the highest word percentage assosiation (39.1%) and where more than half of the predictions were correct.
+* deKlerk - only 1 predictions were correct. This can be expected as we had the least number of words for deKlerk (only 1% of all words were assosiated with him).
+* Ramaphosa - only 4 predictions were correct. This is also expected as only 2.9% of all words were assosiated with him.
+* Zuma - where we had most predictions correct and we also had 30.9% of all words assosiated with him.
+* Mbeki - for whom we had the highest word percentage assosiation (39.1%) and where more than half of the predictions were correct.
 
 Save model
 
@@ -1064,7 +1070,7 @@ load(file = "models/history2.RData")
 
 To asses if any improvement can be gained through the use of TF-IDF over standard word frequency data, a feed-forward neural network, is used to predict which president used a particular sentence in his SONA. The data is split up into a test and train set (70% to 30%).  
 
-```{r, warning=FALSE, message=FALSE}
+```{r}
 library(keras, quietly = TRUE)
 set.seed(123)
 
@@ -1193,7 +1199,7 @@ As can be seen from the reduced train and test accuracy above, TF-IDF did not en
 
 Let's see if we can get an improvement, by correcting the class imbalance. We will use the weight adjustments which we have already calculated for grouping sentences per president.
 
-```{r, warning=FALSE, message=FALSE}
+```{r}
 # initiate model
 model3 = keras_model_sequential()
 
@@ -1241,13 +1247,18 @@ Note our overall performance has not improved and sit on 45%. It is worst than o
 
 Looking at the confusion matrix we can however see the following improvement:
 
-* deKlerk (ID = 0), we now have 6 correct prediction compared with 1 before.
-* Ramaphosa (ID = 5), we now also have 6 correct prediction compared with 4 before.
+* deKlerk - we now have 6 correct prediction compared with 1 before.
+* Ramaphosa - we now also have 6 correct prediction compared with 4 before.
 
 This means that even though our overall performance have decreased, we at least have better performance for the classes which were undersampled.
 
 ```{r}
-table(predicted = model3$predict_classes(x_test), actual = predicter_presidents_id[-train.index])
+pres_predicted3 = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(model3$predict_classes(x_test), (0:5))]
+
+kable(table(predicted = pres_predicted3, actual = pres_actual),
+      caption = "Training confusion matrix for Feed-forward neural network (correcting class imbalance)",
+      row.names = TRUE, digits = 0)
+
 ```
 
 Save model
@@ -1407,7 +1418,7 @@ cat("Core sentence:\n", sona_sentences[2500,]$core_sentence, sep = "")
 
 We are now ready to build our CNN model.
 
-```{r, warning=FALSE, message=FALSE}
+```{r}
 max_features = 3000       # choose max_features most popular words
 minlen = 2                # exclude sentences shorter than this
 maxlen = 50               # longest sentence (for padding)
@@ -1548,7 +1559,7 @@ We can try 3 different approaches:
 
 Approach 1:
 
-```{r, warning=FALSE, message=FALSE}
+```{r}
 # fit model
 history4.1 = model4 %>%
   fit(x = x_train_cnn,
@@ -1569,13 +1580,19 @@ cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cn
 ```
 
 ```{r}
-table(predicted = model4$predict_classes(x_test_cnn), actual = test_cnn$y)
+pres_predicted4.1 = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(model4$predict_classes(x_test_cnn), (0:5))]
+pres_actual_cnn = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(test_cnn$y, (0:5))]
+
+kable(table(predicted = pres_predicted4.1, actual = pres_actual_cnn),
+      caption = "Training confusion matrix for CNN (Approach 1)",
+      row.names = TRUE, digits = 0)
+
 ```
 
 
 Approach 2:
 
-```{r, warning=FALSE, message=FALSE}
+```{r}
 # fit model
 history4.2 = model4 %>%
   fit(x = x_train_cnn,
@@ -1596,13 +1613,17 @@ cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cn
 ```
 
 ```{r}
-table(predicted = model4$predict_classes(x_test_cnn), actual = test_cnn$y)
+pres_predicted4.2 = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(model4$predict_classes(x_test_cnn), (0:5))]
+
+kable(table(predicted = pres_predicted4.2, actual = pres_actual_cnn),
+      caption = "Training confusion matrix for CNN (Approach 2)",
+      row.names = TRUE, digits = 0)
 ```
 
 
 Approach 3:
 
-```{r, warning=FALSE, message=FALSE}
+```{r}
 # build train and test set
 train_cnn = list()
 test_cnn = list()
@@ -1725,19 +1746,27 @@ cat("Test classification success rate = ", mean(model4.3$predict_classes(x_test_
 ```
 
 ```{r}
-table(predicted = model4.3$predict_classes(x_test_cnn), actual = test_cnn$y)
+pres_actual4.3 = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(test_cnn$y, (0:5))]
+
+pres_predicted4.3 = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(model4.3$predict_classes(x_test_cnn), (0:5))]
+
+kable(table(predicted = pres_predicted4.3, actual = pres_actual4.3),
+      caption = "Training confusion matrix for CNN (Approach 3)",
+      row.names = TRUE, digits = 0)
+
 ```
 
 We can compare the approaches either on accuracy per president or average accuracy.
 When using accuracy per president, then approach 1 is better.
 When using average accuracy, then approach 2 is better.
+Approach 3 has a good average accuracy of 59.3% but no predictions were made for Ramaphosa, therefore we will not select this option.
 
 
 ## Expanding on CNN with embeddings
 
 We can try and make our CNN model better by adding more convolutional layers. For the next model we will use the same basis as for model 4 by keeping the same max_features, minlen, maxlen and embedding_dims.
 
-```{r, warning=FALSE, message=FALSE}
+```{r}
 # build train and test set
 train_cnn = list()
 test_cnn = list()
@@ -1850,7 +1879,7 @@ This model only achieved an accuracy of 57.4% which is not better than our first
 
 We can also look at a Recurrent Neural Network (RNN) which is similar to a CNN, where the output depends not only on the present inputs but also on the previous step’s neuron state. The order of words is preserved by using long short-term memory. We can also use Keras to build a RNN and use the Long Short-Term Memory (LSTM) layer.
 
-```{r, warning=FALSE, message=FALSE}
+```{r}
 # initiate model
 model6 = keras_model_sequential()
 
@@ -1883,7 +1912,7 @@ model6 %>% compile(
 history6 = model6 %>%
   fit(x = x_train_cnn,
       y = y_train_cnn,
-      class_weight = list("0"=26.8, "1"=1.5, "2"=1.0, "3"=9.6, "4"=1.0, "5"=10.7),
+      #class_weight = list("0"=26.8, "1"=1.5, "2"=1.0, "3"=9.6, "4"=1.0, "5"=10.7),
       epochs = 20,
       batch_size = 16,
       callbacks = list(callback_early_stopping(monitor = "val_loss", min_delta = 0.001, patience = 1)),
@@ -1942,7 +1971,44 @@ for (i in test_samples)
 ```
 
 
-From the above random tests, we have 3 correct and 2 incorrect predictions which is in line with our 59.2% accuracy for the model.
+From the above random tests, we have 4 correct and 1 incorrect predictions which is better than our average 59.2% accuracy for the model.
+
+
+We can observe the confusion matrix for this RNN model from which we can see that the model gets confused in the following ways:
+
+* Mostly thinks de Klerk is Mandela (50% of the time), while only predicting de Klerk correctly 37.7% of the time.
+* Predict Mandela correctly most of the time (44.4%), but confuse him with Mbeki 37.5% of the time.
+* Fail to predict Ramaphoza and thinks he is Zuma 70.6% of the time.
+
+```{r}
+pres_actual_rnn = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(test_cnn$y, (0:5))]
+
+pres_predicted_rnn = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(model6$predict_classes(x_test_cnn), (0:5))]
+
+kable(table(predicted = pres_predicted_rnn, actual = pres_actual_rnn),
+      caption = "Training confusion matrix for RNN",
+      row.names = TRUE, digits = 0)
+
+```
+
+We can also compare the baseline accuracy with the validation prediction accuracy.
+
+```{r}
+model6_summary = data.frame(matrix(NA, nrow = 6, ncol = 0))
+model6_summary$Total.Sentences = table(sona_sentences$president)
+model6_summary$Baseline.Accuracy = table(sona_sentences$president) / nrow(sona_sentences)
+model6_summary$Prediction.Accuracy = diag(table(predicted = pres_predicted_rnn, actual = pres_actual_rnn)) / table(pres_actual_rnn)
+rownames(model6_summary) = rownames(table(sona_sentences$president))
+
+model6_summary$Baseline.Accuracy = round(model6_summary$Baseline.Accuracy, 4) * 100
+model6_summary$Prediction.Accuracy = round(model6_summary$Prediction.Accuracy, 4) * 100
+
+kable(model6_summary,
+      caption = "RNN model summary",
+      row.names = TRUE, digits = 0)
+
+```
+
 
 
 ## Conclusion
@@ -1952,7 +2018,7 @@ The aim for this dataset was to extract interesting features in the text. This w
 To predict which president said a sentence, the training data was split into a train and test set. Taking a random guess for our dataset of six presidents, given a sentence, one has a chance of 16.67% (1 out of 6) to correctly guess the president who used the sentence in his SONA. A smarter guess would be to look at the distribution of sentences, then guessing always Zuma, would give an accuracy of 36.3%. So the aim with our neural networks was to beat these chances. The following neural network models were built to predict the president from any given sentence extracted from a SONA speech:
 
 * Feed-forward neural network (general) with an accuracy of 49%
-* Feed-forward neural network (with tf-idf) with an accuracy of 33.9
+* Feed-forward neural network (with tf-idf) with an accuracy of 33.9%
 * Convolutional Neural Network (with embeddings) with an accuracy of 59.1%
 * Recurrent Neural Network with an accuracy of 59.2%
 
