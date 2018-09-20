@@ -949,9 +949,9 @@ save(history1, file = "models/history1.RData")
 Load model
 
 ```{r}
-model1 = load_model_hdf5("models/Waldo_SONA_model1.h5")
-load_model_weights_hdf5(model1, "models/Waldo_SONA_model1_weights.h5")
-load("models/history1.RData")
+#model1 = load_model_hdf5("models/Waldo_SONA_model1.h5")
+#load_model_weights_hdf5(model1, "models/Waldo_SONA_model1_weights.h5")
+#load("models/history1.RData")
 ```
 
 
@@ -1028,7 +1028,7 @@ cat("Test classification success rate = ", mean(model2$predict_classes(x_test) =
 ```
 
 
-We can see our test accuracy improved slightly from 48.2% to 49%, but the model is still overfitting.
+We can see our test accuracy reduced slightly from 49.2% to 49%, and the model is still overfitting.
 
 We can also look at the confusion matrix:
 
@@ -1060,9 +1060,9 @@ save(history2, file = "models/history2.RData")
 Load model
 
 ```{r}
-model2 = load_model_hdf5("models/Waldo_SONA_model2.h5")
-load_model_weights_hdf5(model2, "models/Waldo_SONA_model2_weights.h5")
-load(file = "models/history2.RData")
+#model2 = load_model_hdf5("models/Waldo_SONA_model2.h5")
+#load_model_weights_hdf5(model2, "models/Waldo_SONA_model2_weights.h5")
+#load(file = "models/history2.RData")
 ```
 
 
@@ -1133,17 +1133,11 @@ output_shape = ncol(test_bow_tfidf_yc) # the 6 presidents we want to predict
 model7 = keras_model_sequential()
 
 model7 %>% 
-  layer_dense(units = 0.6*input_shape,                     # number of neurons in 1st hidden layer, use 2/3 of (input_shape + output_shape)
-              activation = 'relu',              # use a rectified linear unit as an activation function in 1st hidden layer
-              input_shape = input_shape) %>%    # dimension of input array
-  layer_dropout(rate = 0.3) %>%                 # add dropout with rate 30%
-  
-  layer_dense(units = 3258,                     # number of neurons in 2nd hidden layer, use 1/2 of 1st hidden layer
-              activation = 'relu') %>%          # use a rectified linear unit as an activation function in 2nd hidden layer
-  layer_dropout(rate = 0.2) %>%                 # add dropout with rate 20%
-  
-  layer_dense(units = output_shape) %>%         # adds an output layer to the network
-  layer_activation('softmax')                   # use softmax activation function in the output layer
+  layer_dense(units = 640,                 # number of neurons in the hidden layer
+  input_shape = input_shape) %>%           # dimension of input array
+  layer_activation('relu') %>%             # use a rectified linear unit as an activation function in the hidden layer
+  layer_dense(units = output_shape) %>%    # adds an output layer to the network
+  layer_activation('softmax')              # use softmax activation function in the output layer
 
 # compile model
 model7 %>% compile(
@@ -1178,10 +1172,10 @@ save(pres_lookup, sona_bow_tfidf, train_ids, train_bow_tfidf, test_bow_tfidf, tr
 Load model
 
 ```{r}
-model7 = load_model_hdf5("models/FE_SONA_model7.h5") #save model to use later on
-load_model_weights_hdf5(model7, "models/FE_SONA_model7_weights.h5") #save model weights to use later on
-load("models/history7.RData")
-load("models/NN_TFIDF.RData")
+#model7 = load_model_hdf5("models/FE_SONA_model7.h5") #save model to use later on
+#load_model_weights_hdf5(model7, "models/FE_SONA_model7_weights.h5") #save model weights to use later on
+#load("models/history7.RData")
+#load("models/NN_TFIDF.RData")
 ```
 
 
@@ -1272,9 +1266,9 @@ save(history3, file = "models/history3.RData")
 Load model
 
 ```{r}
-model3 = load_model_hdf5("models/Waldo_SONA_model3.h5")
-load_model_weights_hdf5(model3, "models/Waldo_SONA_model3_weights.h5")
-load(file = "models/history3.RData")
+#model3 = load_model_hdf5("models/Waldo_SONA_model3.h5")
+#load_model_weights_hdf5(model3, "models/Waldo_SONA_model3_weights.h5")
+#load(file = "models/history3.RData")
 ```
 
 Sentence summary with stop words:
@@ -1522,9 +1516,9 @@ save(history4, file = "models/history4.RData")
 Load model
 
 ```{r}
-model4 = load_model_hdf5("models/Waldo_SONA_model4.h5")
-load_model_weights_hdf5(model4, "models/Waldo_SONA_model4_weights.h5")
-load(file = "models/history4.RData")
+#model4 = load_model_hdf5("models/Waldo_SONA_model4.h5")
+#load_model_weights_hdf5(model4, "models/Waldo_SONA_model4_weights.h5")
+#load(file = "models/history4.RData")
 ```
 
 ```{r}
@@ -1532,7 +1526,7 @@ cat("Train classification success rate = ", mean(model4$predict_classes(x_train_
 cat("Test classification success rate = ", mean(model4$predict_classes(x_test_cnn) == test_cnn$y))
 ```
 
-Model 4 is a good improvement on the previous models. We now have an accuracy of 59.1% where the previous best was 49%
+Model 4 is a good improvement on the previous models. We now have an accuracy of 59.2% where the previous best was 49.2%
 
 We have run 60 previous versions of this model to help determine what the best parameter setting should be. There were 20 tests, where each test was run 3 times and the best test accuracy was recorded. It is difficult to exactly repreduce the keras results from within R as Phyton will set its own random values with a different seed. The following table provide a summary of these tests. Note that parameter values are only displayed when a change to it was made. If no value is displayed in one of the parameter columns then the previous value was used for that specific test.
 
@@ -1589,6 +1583,13 @@ kable(table(predicted = pres_predicted4.1, actual = pres_actual_cnn),
 
 ```
 
+```{r}
+# Prediction accuracy per president
+pres_predicted4.1 = data.frame(round(diag(table(predicted = pres_predicted4.1, actual = pres_actual_cnn)) / table(pres_actual_cnn), 4) * 100)
+colnames(pres_predicted4.1) = c("President", "Accuracy")
+pres_predicted4.1
+```
+
 
 Approach 2:
 
@@ -1618,6 +1619,13 @@ pres_predicted4.2 = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramap
 kable(table(predicted = pres_predicted4.2, actual = pres_actual_cnn),
       caption = "Training confusion matrix for CNN (Approach 2)",
       row.names = TRUE, digits = 0)
+```
+
+```{r}
+# Prediction accuracy per president
+pres_predicted4.2 = data.frame(round(diag(table(predicted = pres_predicted4.2, actual = pres_actual_cnn)) / table(pres_actual_cnn), 4) * 100)
+colnames(pres_predicted4.2) = c("President", "Accuracy")
+pres_predicted4.2
 ```
 
 
@@ -1733,11 +1741,11 @@ save(history4.3, file = "models/history4.3.RData")
 Load model
 
 ```{r}
-model4.3 = load_model_hdf5("models/Waldo_SONA_model4.3.h5")
-load_model_weights_hdf5(model4.3, "models/Waldo_SONA_model4.3_weights.h5")
-load("models/history4.1.RData")
-load("models/history4.2.RData")
-load("models/history4.3.RData")
+#model4.3 = load_model_hdf5("models/Waldo_SONA_model4.3.h5")
+#load_model_weights_hdf5(model4.3, "models/Waldo_SONA_model4.3_weights.h5")
+#load("models/history4.1.RData")
+#load("models/history4.2.RData")
+#load("models/history4.3.RData")
 ```
 
 ```{r}
@@ -1756,10 +1764,19 @@ kable(table(predicted = pres_predicted4.3, actual = pres_actual4.3),
 
 ```
 
+```{r}
+# Prediction accuracy per president
+pres_predicted4.3 = data.frame(round(diag(table(predicted = pres_predicted4.3, actual = pres_actual4.3)) / table(pres_actual4.3), 4) * 100)
+colnames(pres_predicted4.3) = c("President", "Accuracy")
+pres_predicted4.3
+```
+Note on above: The accuracy for Ramaphosa and Zuma should be added and allocated to Zuma as there was no predictions for Ramaphosa. This allocation occured incorrectly when this table was build.
+
+
 We can compare the approaches either on accuracy per president or average accuracy.
 When using accuracy per president, then approach 1 is better.
 When using average accuracy, then approach 2 is better.
-Approach 3 has a good average accuracy of 59.3% but no predictions were made for Ramaphosa, therefore we will not select this option.
+Approach 3 has a good average accuracy of 58.2% but no predictions were made for Ramaphosa, therefore we will not select this option.
 
 
 ## Expanding on CNN with embeddings
@@ -1862,9 +1879,9 @@ save(history5, file = "models/history5.RData")
 Load model
 
 ```{r}
-model5 = load_model_hdf5("models/Waldo_SONA_model5.h5")
-load_model_weights_hdf5(model5, "models/Waldo_SONA_model5_weights.h5")
-load("models/history5.RData")
+#model5 = load_model_hdf5("models/Waldo_SONA_model5.h5")
+#load_model_weights_hdf5(model5, "models/Waldo_SONA_model5_weights.h5")
+#load("models/history5.RData")
 ```
 
 ```{r}
@@ -1872,7 +1889,7 @@ cat("Train classification success rate = ", mean(model5$predict_classes(x_train_
 cat("Test classification success rate = ", mean(model5$predict_classes(x_test_cnn) == test_cnn$y))
 ```
 
-This model only achieved an accuracy of 57.4% which is not better than our first CNN model which achieved 59.1%. It seems that a more general approach worked better than to add to many extra layers.
+This model only achieved an accuracy of 54.6% which is not better than our first CNN model which achieved 59.2%. It seems that a more general approach worked better than to add to many extra layers.
 
 
 ## RNN
@@ -1933,9 +1950,9 @@ save(history6, file = "models/history6.RData")
 Load model
 
 ```{r}
-model6 = load_model_hdf5("models/Waldo_SONA_model6.h5")
-load_model_weights_hdf5(model6, "models/Waldo_SONA_model6_weights.h5")
-load("models/history6.RData")
+#model6 = load_model_hdf5("models/Waldo_SONA_model6.h5")
+#load_model_weights_hdf5(model6, "models/Waldo_SONA_model6_weights.h5")
+#load("models/history6.RData")
 ```
 
 ```{r}
@@ -1943,7 +1960,7 @@ cat("Train classification success rate = ", mean(model6$predict_classes(x_train_
 cat("Test classification success rate = ", mean(model6$predict_classes(x_test_cnn) == test_cnn$y))
 ```
 
-The RNN is fairly simple model and have a better accuracy when compared to our previous models (59.2% compared to 59.1%).
+The RNN is fairly simple model and have our best accuracy when compared to our previous models (59.7% compared to 59.2%).
 
 
 ## Make some predictions
@@ -1971,14 +1988,14 @@ for (i in test_samples)
 ```
 
 
-From the above random tests, we have 4 correct and 1 incorrect predictions which is better than our average 59.2% accuracy for the model.
+From the above random tests, we have 4 correct and 1 incorrect predictions which is better than our average 59.7% accuracy for the CNN model.
 
 
 We can observe the confusion matrix for this RNN model from which we can see that the model gets confused in the following ways:
 
-* Mostly thinks de Klerk is Mandela (50% of the time), while only predicting de Klerk correctly 37.7% of the time.
-* Predict Mandela correctly most of the time (44.4%), but confuse him with Mbeki 37.5% of the time.
-* Fail to predict Ramaphoza and thinks he is Zuma 70.6% of the time.
+* Predict Mandela correctly most of the time (43.6%), but confuse him with Mbeki 38% of the time.
+* Mostly thinks Motlanthe is Mbeki (42.3% of the time), while only predicting Motlanthe correctly 3.8% of the time.
+* Fail to predict Ramaphoza and thinks he is Zuma 46.7% of the time.
 
 ```{r}
 pres_actual_rnn = c("deKlerk", "Mandela", "Mbeki", "Motlanthe", "Zuma", "Ramaphosa")[ match(test_cnn$y, (0:5))]
@@ -2017,10 +2034,10 @@ The aim for this dataset was to extract interesting features in the text. This w
  
 To predict which president said a sentence, the training data was split into a train and test set. Taking a random guess for our dataset of six presidents, given a sentence, one has a chance of 16.67% (1 out of 6) to correctly guess the president who used the sentence in his SONA. A smarter guess would be to look at the distribution of sentences, then guessing always Zuma, would give an accuracy of 36.3%. So the aim with our neural networks was to beat these chances. The following neural network models were built to predict the president from any given sentence extracted from a SONA speech:
 
-* Feed-forward neural network (general) with an accuracy of 49%
-* Feed-forward neural network (with tf-idf) with an accuracy of 33.9%
-* Convolutional Neural Network (with embeddings) with an accuracy of 59.1%
-* Recurrent Neural Network with an accuracy of 59.2%
+* Feed-forward neural network (general) with an accuracy of 49.2%
+* Feed-forward neural network (with tf-idf) with an accuracy of 22%
+* Convolutional Neural Network (with embeddings) with an accuracy of 59.2%
+* Recurrent Neural Network with an accuracy of 59.7%
 
 The feed-forward neural networks did not perform very as well they do not preserve the order of words within sentences. Therefore, the convolutional and recurrent neural networks performed much better where the order of words are preserved. Correction of class imbalances were also attempted but this did not provide any significant improvement, and therefore a decision was made to keep class data as provided.
 
